@@ -11,6 +11,7 @@ void appLog(String message) {
 
 void main() async {
   
+  
   WidgetsFlutterBinding.ensureInitialized();
   appLog('main() başladı');
   try {
