@@ -1,4 +1,4 @@
-package com.example.periodicallynotification
+package com.siyazilim.periodicallynotification
 
 import android.os.Build
 import android.os.Bundle
@@ -11,7 +11,7 @@ import android.app.NotificationManager
 import android.content.Context
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "com.example.periodicallynotification/channel"
+    private val CHANNEL = "com.siyazilim.periodicallynotification/channel"
     
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

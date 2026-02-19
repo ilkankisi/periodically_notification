@@ -5,56 +5,116 @@ import Foundation
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
+  var flutterEngine: FlutterEngine?
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // Request notification permissions
-    if #available(iOS 10.0, *) {
-      UNUserNotificationCenter.current().delegate = self
-      let authOptions: UNAuthorizationOptions = [.alert, .badge, .sound]
-      UNUserNotificationCenter.current().requestAuthorization(
-        options: authOptions,
-        completionHandler: { _, _ in }
-      )
-    } else {
-      let settings: UIUserNotificationSettings =
-        UIUserNotificationSettings(types: [.alert, .badge, .sound], categories: nil)
-      application.registerUserNotificationSettings(settings)
-    }
+    print("[APP-SWIFT] DidFinishLaunching başladı")
     
-    application.registerForRemoteNotifications()
-    GeneratedPluginRegistrant.register(with: self)
-    let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    do {
+      // Request notification permissions
+      if #available(iOS 10.0, *) {
+        UNUserNotificationCenter.current().delegate = self
+        let authOptions: UNAuthorizationOptions = [.alert, .badge, .sound]
+        UNUserNotificationCenter.current().requestAuthorization(
+          options: authOptions,
+          completionHandler: { granted, error in
+            print("[APP-SWIFT] Notification permission: \(granted)")
+          }
+        )
+      } else {
+        let settings: UIUserNotificationSettings =
+          UIUserNotificationSettings(types: [.alert, .badge, .sound], categories: nil)
+        application.registerUserNotificationSettings(settings)
+      }
+      
+      application.registerForRemoteNotifications()
 
-    return result
+      // Start a dedicated FlutterEngine and register plugins with it so
+      // the engine is available when SceneDelegate creates the FlutterViewController.
+      self.flutterEngine = FlutterEngine(name: "my_engine")
+      self.flutterEngine?.run()
+      GeneratedPluginRegistrant.register(with: self.flutterEngine!)
+
+      let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+      
+      print("[APP-SWIFT] DidFinishLaunching tamamlandı (result: \(result))")
+      return result
+    } catch {
+      print("[APP-SWIFT] ERROR DidFinishLaunching: \(error)")
+      return false
+    }
   }
   
-  // Handle FCM token registration
   override func application(_ application: UIApplication,
                             didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-    // Pass device token to Flutter
+    print("[APP-SWIFT] FCM token alındı")
     super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
   }
   
   override func application(_ application: UIApplication,
                             didFailToRegisterForRemoteNotificationsWithError error: Error) {
-    print("Failed to register for remote notifications: \(error)")
+    print("[APP-SWIFT] ERROR FCM token: \(error.localizedDescription)")
   }
   
-  // MARK: - Scene Lifecycle (iOS 13+)
-  // Override scene lifecycle methods to satisfy iOS 13+ requirements
-  // For Flutter apps, we provide a minimal scene configuration
   @available(iOS 13.0, *)
   override func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
-    // Return a basic scene configuration without delegate
-    // Flutter manages the window lifecycle internally
+    print("[APP-SWIFT] Scene configuration talep edildi")
     let config = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+    config.delegateClass = SceneDelegate.self
+    print("[APP-SWIFT] SceneDelegate atandı")
     return config
   }
   
   @available(iOS 13.0, *)
   override func application(_ application: UIApplication, didDiscardSceneSessions sceneSessions: Set<UISceneSession>) {
-    // No special handling needed for Flutter apps
+    print("[APP-SWIFT] Scene sessions discard edildi")
+  }
+}
+
+@available(iOS 13.0, *)
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+  var window: UIWindow?
+  
+  func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+    print("[APP-SWIFT] Scene willConnect başladı")
+    
+    guard let windowScene = scene as? UIWindowScene else {
+      print("[APP-SWIFT] ERROR: Scene is not UIWindowScene")
+      return
+    }
+    
+    print("[APP-SWIFT] UIWindowScene oluşturuldu")
+    
+    let window = UIWindow(windowScene: windowScene)
+    print("[APP-SWIFT] UIWindow oluşturuldu")
+    
+    // FlutterViewController'ı AppDelegate'de başlatılan FlutterEngine ile oluşturup set et
+    if let appDelegate = UIApplication.shared.delegate as? AppDelegate, let engine = appDelegate.flutterEngine {
+      let flutterViewController = FlutterViewController(engine: engine, nibName: nil, bundle: nil)
+      window.rootViewController = flutterViewController
+      print("[APP-SWIFT] FlutterViewController (engine ile) set edildi")
+    } else {
+      let flutterViewController = FlutterViewController()
+      window.rootViewController = flutterViewController
+      print("[APP-SWIFT] FlutterViewController (fallback) set edildi")
+    }
+    
+    self.window = window
+    window.makeKeyAndVisible()
+    print("[APP-SWIFT] UIWindow visible yapıldı")
+  }
+  
+  func sceneDidBecomeActive(_ scene: UIScene) {
+    print("[APP-SWIFT] Scene did become active")
+  }
+  
+  func sceneWillResignActive(_ scene: UIScene) {
+    print("[APP-SWIFT] Scene will resign active")
+  }
+  
+  func sceneDidEnterBackground(_ scene: UIScene) {
+    print("[APP-SWIFT] Scene did enter background")
   }
 }

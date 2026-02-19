@@ -1,0 +1,16 @@
+[{
+	"id": "98L6SWPSbZdHsnqIpYKo",
+	"title": "Atatürk ne dedi",
+	"body": "Yurtta sulh, cihanda sulh.",
+	"order": 1,
+	"sentAt": "2026-02-01T02:40:04.000Z",
+	"image": null
+},
+{
+	"id": "t3Ein6C1ADcKF4FDq5d7",
+	"title": "Örnek Başlık",
+	"body": "Bu bir örnek içerik metnidir. Günün içeriği burada görünecek.",
+	"order": 2,
+	"sentAt": "2026-02-09T02:40:05.000Z",
+	"image": null
+}]

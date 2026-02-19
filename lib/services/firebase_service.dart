@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:home_widget/home_widget.dart';
 import 'dart:async';
+import 'motivation_cache_service.dart';
 
 /// Firebase Messaging Service
 /// Handles FCM topic subscription and message handling
@@ -21,60 +22,108 @@ class FirebaseService {
   static const String _widgetUpdatedAtKey = 'widget_updatedAt';
 
   /// Initialize Firebase and subscribe to topic
-  Future<void> initialize() async {
+  static Future<void> initialize() async {
     try {
-      // Request notification permissions
-      NotificationSettings settings = await _messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        provisional: false,
-      );
+      print('[INIT] Starting Firebase initialization...');
+      
+      // Create local instances
+      final messaging = FirebaseMessaging.instance;
+      final firestore = FirebaseFirestore.instance;
+      
+      // Request notification permissions with timeout
+      print('[INIT] Requesting notification permissions...');
+      try {
+        NotificationSettings? settings = await messaging.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+          provisional: false,
+        ).timeout(
+          const Duration(seconds: 5),
+        );
 
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        print('User granted notification permission');
-      } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
-        print('User granted provisional notification permission');
-      } else {
-        print('User declined or has not accepted notification permission');
+        if (settings != null) {
+          if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+            print('[INIT] ✅ User granted notification permission');
+          } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+            print('[INIT] ⚠️ User granted provisional notification permission');
+          } else {
+            print('[INIT] ⚠️ User declined notification permission');
+          }
+        } else {
+          print('[INIT] ⚠️ Permission result is null');
+        }
+      } on TimeoutException {
+        print('[INIT] ⚠️ Permission request timed out, continuing...');
+      } catch (e) {
+        print('[INIT] ⚠️ Error requesting permissions: $e');
       }
 
-      // Get FCM token (with retry logic)
+      // Get FCM token with timeout
+      print('[INIT] Getting FCM token...');
       String? token;
       try {
-        token = await _messaging.getToken();
-        print('FCM Token: $token');
+        token = await messaging.getToken().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            print('[INIT] getToken timeout, skipping...');
+            return null;
+          },
+        );
+        if (token != null) {
+          print('[INIT] ✅ FCM Token: $token');
+        } else {
+          print('[INIT] ⚠️ FCM Token is null');
+        }
       } catch (e) {
-        print('Warning: Could not get FCM token: $e');
-        print('This might be due to network issues or Google Play Services');
-        // Continue anyway - topic subscription might still work
+        print('[INIT] ❌ Error getting FCM token: $e');
       }
 
-      // Subscribe to topic (with error handling)
+      // Subscribe to topic with timeout
+      print('[INIT] Subscribing to topic daily_widget_all...');
       try {
-        await _messaging.subscribeToTopic(_topic);
-        print('Subscribed to topic: $_topic');
+        await messaging.subscribeToTopic('daily_widget_all').timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            print('[INIT] subscribeToTopic timeout, skipping...');
+          },
+        );
+        print('[INIT] ✅ Subscribed to topic: daily_widget_all');
       } catch (e) {
-        print('Warning: Could not subscribe to topic: $e');
-        // Continue anyway - app can still receive messages if token is valid
+        print('[INIT] ❌ Error subscribing to topic: $e');
       }
 
       // Set up message handlers
-      _setupMessageHandlers();
+      print('[INIT] Setting up message handlers...');
+      _setupMessageHandlers(firestore);
 
-      // Initialize home_widget
-      await HomeWidget.setAppGroupId('group.com.example.periodicallynotification');
+      // Initialize home_widget with timeout
+      print('[INIT] Initializing home_widget...');
+      try {
+        await HomeWidget.setAppGroupId('group.com.siyazilim.periodicallynotification').timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            print('[INIT] HomeWidget timeout, continuing...');
+          },
+        );
+        print('[INIT] ✅ HomeWidget initialized');
+      } catch (e) {
+        print('[INIT] ❌ HomeWidget error: $e');
+      }
+
+      print('[INIT] ✅ Firebase initialization complete!');
     } catch (e) {
-      print('Error initializing Firebase: $e');
+      print('[INIT] ❌ Critical error: $e');
+      rethrow;
     }
   }
 
   /// Set up FCM message handlers
-  void _setupMessageHandlers() {
+  static void _setupMessageHandlers(FirebaseFirestore firestore) {
     // Foreground message handler
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       print('[FCM_WIDGET] Foreground message received: ${message.messageId}');
-      _handleMessage(message);
+      _handleMessage(message, firestore);
     });
 
     // Background message handler (must be top-level function)
@@ -83,20 +132,20 @@ class FirebaseService {
     // Notification tap handler (when app is in background/terminated)
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       print('[FCM_WIDGET] Notification tapped: ${message.messageId}');
-      _handleMessage(message);
+      _handleMessage(message, firestore);
     });
 
     // Check if app was opened from a notification (when app was terminated)
-    _messaging.getInitialMessage().then((RemoteMessage? message) {
+    FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
       if (message != null) {
         print('[FCM_WIDGET] App opened from notification: ${message.messageId}');
-        _handleMessage(message);
+        _handleMessage(message, firestore);
       }
     });
   }
 
   /// Handle incoming FCM message
-  Future<void> _handleMessage(RemoteMessage message) async {
+  static Future<void> _handleMessage(RemoteMessage message, FirebaseFirestore firestore) async {
     try {
       print('[FCM_WIDGET] === MESSAGE HANDLER START ===');
       print('[FCM_WIDGET] Message ID: ${message.messageId}');
@@ -133,7 +182,7 @@ class FirebaseService {
         if (docPath != null && docPath.isNotEmpty) {
           print('[FCM_WIDGET] Fetching from Firestore: $docPath');
           try {
-            final doc = await _firestore.doc(docPath).get();
+            final doc = await firestore.doc(docPath).get();
             if (doc.exists) {
               final itemData = doc.data()!;
               print('[FCM_WIDGET] Raw Firestore data: $itemData');
@@ -163,6 +212,10 @@ class FirebaseService {
               
               widgetData['title'] = itemData['title'] ?? widgetData['title'];
               widgetData['body'] = bodyValue?.toString() ?? widgetData['body'];
+
+              // Yerel önbelleğe ekle - anasayfa buradan okuyacak
+              await MotivationCacheService.upsertFromFirestore(itemId, itemData);
+              print('[FCM_WIDGET] ✅ Motivation cache güncellendi');
               
               print('[FCM_WIDGET] ✅ Firestore data fetched: title=${widgetData['title']}, body=${widgetData['body']}');
             } else {
@@ -175,6 +228,17 @@ class FirebaseService {
           }
         } else {
           print('[FCM_WIDGET] ⚠️ No docPath provided, using payload data');
+          if (itemId != null && itemId.isNotEmpty) {
+            await MotivationCacheService.upsertFromFirestore(
+              itemId,
+              {
+                'title': widgetData['title'],
+                'body': widgetData['body'],
+                'sentAt': widgetData['updatedAt'],
+              },
+            );
+            print('[FCM_WIDGET] ✅ Motivation cache (payload) güncellendi');
+          }
         }
 
         print('[FCM_WIDGET] Final widgetData: title=${widgetData['title']}, body=${widgetData['body']}');
@@ -197,7 +261,7 @@ class FirebaseService {
   }
 
   /// Update home widget with new content
-  Future<void> _updateHomeWidget(Map<String, dynamic> data) async {
+  static Future<void> _updateHomeWidget(Map<String, dynamic> data) async {
     try {
       print('[FCM_WIDGET] === UPDATE WIDGET START ===');
       print('[FCM_WIDGET] Data to save: title=${data['title']}, body=${data['body']}, itemId=${data['itemId']}');
@@ -242,7 +306,7 @@ class FirebaseService {
         name: 'DailyWidget',
         iOSName: 'DailyWidget',
         androidName: 'DailyWidgetProvider',
-        qualifiedAndroidName: 'com.example.periodicallynotification.widget.DailyWidgetProvider',
+        qualifiedAndroidName: 'com.siyazilim.periodicallynotification.widget.DailyWidgetProvider',
       );
       print('[FCM_WIDGET] ✅ HomeWidget.updateWidget completed');
 
@@ -269,8 +333,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   print('[FCM_WIDGET] Background message received: ${message.messageId}');
   
-  // Handle the message
-  final service = FirebaseService();
-  await service._handleMessage(message);
+  // Handle the message - create firestore instance for handler
+  final firestore = FirebaseFirestore.instance;
+  await FirebaseService._handleMessage(message, firestore);
 }
 

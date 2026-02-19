@@ -49,7 +49,7 @@
         
         <!-- Android Widget Provider -->
         <receiver
-            android:name="com.example.periodicallynotification.widget.DailyWidgetProvider"
+            android:name="com.siyazilim.periodicallynotification.widget.DailyWidgetProvider"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

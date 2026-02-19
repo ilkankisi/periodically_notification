@@ -74,7 +74,7 @@ Firebase Console > Firestore'da şu yapıyı oluşturun:
 2. File > New > Target > Widget Extension
 3. Product Name: `DailyWidget`
 4. `ios/DailyWidget/` klasöründeki Swift dosyalarını extension'a kopyalayın
-5. App Group ayarlarını yapın: `group.com.example.periodicallynotification`
+5. App Group ayarlarını yapın: `group.com.siyazilim.periodicallynotification`
 
 ### 6. Çalıştırma
 

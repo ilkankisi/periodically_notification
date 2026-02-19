@@ -1,11 +1,11 @@
-package com.example.periodicallynotification.widget
+package com.siyazilim.periodicallynotification.widget
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.SharedPreferences
 import android.widget.RemoteViews
-import com.example.periodicallynotification.R
+import com.siyazilim.periodicallynotification.R
 import java.text.SimpleDateFormat
 import java.util.*
 

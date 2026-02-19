@@ -1,4 +1,4 @@
-package com.example.periodicallynotification.widget
+package com.siyazilim.periodicallynotification.widget
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -11,7 +11,7 @@ import android.appwidget.AppWidgetManager
  */
 class WidgetUpdateReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == "com.example.periodicallynotification.UPDATE_WIDGET") {
+        if (intent.action == "com.siyazilim.periodicallynotification.UPDATE_WIDGET") {
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val provider = DailyWidgetProvider()
             val appWidgetIds = appWidgetManager.getAppWidgetIds(

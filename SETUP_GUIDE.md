@@ -20,8 +20,8 @@ Bu dokümantasyon, günlük içerik bildirim sistemi ve widget'ların kurulumu i
 1. [Firebase Console](https://console.firebase.google.com/)'a gidin
 2. Yeni proje oluşturun veya mevcut projeyi seçin
 3. Projeye Flutter uygulaması ekleyin:
-   - iOS: Bundle ID: `com.example.periodicallynotification`
-   - Android: Package name: `com.example.periodicallynotification`
+   - iOS: Bundle ID: `com.siyazilim.periodicallynotification`
+   - Android: Package name: `com.siyazilim.periodicallynotification`
 
 ### 2. Firebase Dosyalarını İndirme
 
@@ -90,7 +90,7 @@ Bağımlılıklar:
 3. **Signing & Capabilities** sekmesine gidin
 4. **+ Capability** butonuna tıklayın
 5. **App Groups** ekleyin
-6. App Group ID: `group.com.example.periodicallynotification`
+6. App Group ID: `group.com.siyazilim.periodicallynotification`
 7. Bu ID'yi hem Runner hem de DailyWidget extension için ekleyin
 
 ### 2. Widget Extension Oluşturma
@@ -113,7 +113,7 @@ Oluşturduğumuz dosyaları widget extension'a kopyalayın:
 1. DailyWidget target'ını seçin
 2. **Signing & Capabilities** sekmesine gidin
 3. **App Groups** ekleyin
-4. Aynı App Group ID'yi ekleyin: `group.com.example.periodicallynotification`
+4. Aynı App Group ID'yi ekleyin: `group.com.siyazilim.periodicallynotification`
 
 ### 5. APNs (Apple Push Notification Service) Yapılandırması
 

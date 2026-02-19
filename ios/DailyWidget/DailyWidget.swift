@@ -55,7 +55,7 @@ struct DailyWidgetProvider: TimelineProvider {
     }
     
     private func loadWidgetData() -> DailyWidgetEntry {
-        let userDefaults = UserDefaults(suiteName: "group.com.example.periodicallynotification")
+        let userDefaults = UserDefaults(suiteName: "group.com.siyazilim.periodicallynotification")
         
         let title = userDefaults?.string(forKey: "widget_title") ?? "Günün İçeriği"
         let body = userDefaults?.string(forKey: "widget_body") ?? "İçerik yükleniyor..."
