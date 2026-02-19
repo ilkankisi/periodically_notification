@@ -7,7 +7,10 @@
     "shell": "firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "remove-sent": "node scripts/remove-sent-field.js",
+    "add-imageurls": "node scripts/add-imageurls.js",
+    "export-motivation": "node scripts/export-to-motivation-json.js"
   },
   "engines": {
     "node": "24"

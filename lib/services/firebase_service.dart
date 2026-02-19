@@ -1,9 +1,17 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter_app_group_directory/flutter_app_group_directory.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'motivation_cache_service.dart';
+import 'motivation_service.dart';
 
 /// Firebase Messaging Service
 /// Handles FCM topic subscription and message handling
@@ -20,6 +28,11 @@ class FirebaseService {
   static const String _widgetBodyKey = 'widget_body';
   static const String _widgetItemIdKey = 'widget_itemId';
   static const String _widgetUpdatedAtKey = 'widget_updatedAt';
+  static const String _widgetImageUrlKey = 'widget_imageUrl';
+  static const String _widgetImagePathKey = 'widget_imagePath'; // Android: yerel dosya yolu
+
+  /// FCM işlendiğinde anasayfanın yenilenmesi için
+  static final StreamController<void> onContentUpdated = StreamController<void>.broadcast();
 
   /// Initialize Firebase and subscribe to topic
   static Future<void> initialize() async {
@@ -174,6 +187,7 @@ class FirebaseService {
           'body': data['body'] ?? '',
           'itemId': itemId ?? '',
           'updatedAt': data['updatedAt'] ?? DateTime.now().toIso8601String(),
+          'imageUrl': data['imageUrl'] ?? '', // FCM payload'tan - Firestore fetch öncesi
         };
         
         print('[FCM_WIDGET] Initial widgetData: title=${widgetData['title']}, body=${widgetData['body']}');
@@ -212,19 +226,19 @@ class FirebaseService {
               
               widgetData['title'] = itemData['title'] ?? widgetData['title'];
               widgetData['body'] = bodyValue?.toString() ?? widgetData['body'];
+              widgetData['imageUrl'] = itemData['imageUrl'] ?? data['imageUrl'] ?? '';
 
-              // Yerel önbelleğe ekle - anasayfa buradan okuyacak
               await MotivationCacheService.upsertFromFirestore(itemId, itemData);
               print('[FCM_WIDGET] ✅ Motivation cache güncellendi');
-              
               print('[FCM_WIDGET] ✅ Firestore data fetched: title=${widgetData['title']}, body=${widgetData['body']}');
             } else {
               print('[FCM_WIDGET] ⚠️ Firestore document does not exist');
+              await _upsertCacheFromPayload(itemId, widgetData);
             }
           } catch (e) {
             print('[FCM_WIDGET] ❌ Error fetching from Firestore: $e');
             print('[FCM_WIDGET] Stack trace: ${StackTrace.current}');
-            // Continue with payload data
+            await _upsertCacheFromPayload(itemId ?? '', widgetData);
           }
         } else {
           print('[FCM_WIDGET] ⚠️ No docPath provided, using payload data');
@@ -244,9 +258,12 @@ class FirebaseService {
         print('[FCM_WIDGET] Final widgetData: title=${widgetData['title']}, body=${widgetData['body']}');
         print('[FCM_WIDGET] Calling _updateHomeWidget...');
 
-        // Update home widget
         await _updateHomeWidget(widgetData);
-        
+
+        try {
+          onContentUpdated.add(null);
+        } catch (_) {}
+
         print('[FCM_WIDGET] ✅ _updateHomeWidget completed');
       } else {
         print('[FCM_WIDGET] ❌ Not a DAILY_WIDGET message. Type: $messageType');
@@ -257,6 +274,67 @@ class FirebaseService {
     } catch (e) {
       print('[FCM_WIDGET] ❌ ERROR in _handleMessage: $e');
       print('[FCM_WIDGET] Stack trace: ${StackTrace.current}');
+    }
+  }
+
+  /// Firestore fetch başarısız/boş olduğunda cache'i FCM payload ile güncelle
+  static Future<void> _upsertCacheFromPayload(String itemId, Map<String, dynamic> widgetData) async {
+    if (itemId.isEmpty) return;
+    try {
+      await MotivationCacheService.upsertFromFirestore(itemId, {
+        'id': itemId,
+        'title': widgetData['title'],
+        'body': widgetData['body'],
+        'sentAt': widgetData['updatedAt'],
+        'imageUrl': widgetData['imageUrl'],
+      });
+      print('[FCM_WIDGET] ✅ Cache güncellendi (payload)');
+    } catch (e) {
+      print('[FCM_WIDGET] ⚠️ Cache payload update error: $e');
+    }
+  }
+
+  /// Resmi indirir ve widget_cache klasörüne kaydeder.
+  /// Android: filesDir + cacheDir. iOS: App Group container (AsyncImage WidgetKit'ta çalışmaz).
+  static Future<String?> _downloadAndCacheWidgetImage(String imageUrl) async {
+    try {
+      final response = await http.get(Uri.parse(imageUrl)).timeout(
+        const Duration(seconds: 15),
+      );
+      if (response.statusCode != 200) return null;
+      final bytes = response.bodyBytes;
+
+      if (!kIsWeb && Platform.isAndroid) {
+        final supportDir = await getApplicationSupportDirectory();
+        final supportCacheDir = Directory('${supportDir.path}/widget_cache');
+        if (!await supportCacheDir.exists()) await supportCacheDir.create(recursive: true);
+        final supportFile = File('${supportCacheDir.path}/widget_image.jpg');
+        await supportFile.writeAsBytes(bytes);
+        final cacheDir = await getTemporaryDirectory();
+        final tempCacheDir = Directory('${cacheDir.path}/widget_cache');
+        if (!await tempCacheDir.exists()) await tempCacheDir.create(recursive: true);
+        await File('${tempCacheDir.path}/widget_image.jpg').writeAsBytes(bytes);
+        print('[FCM_WIDGET] ✅ Resim kaydedildi (Android): ${supportFile.path}');
+        return supportFile.path;
+      }
+
+      if (!kIsWeb && Platform.isIOS) {
+        final dir = await FlutterAppGroupDirectory.getAppGroupDirectory(
+          'group.com.siyazilim.periodicallynotification',
+        );
+        if (dir != null) {
+          final cacheDir = Directory('${dir.path}/widget_cache');
+          if (!await cacheDir.exists()) await cacheDir.create(recursive: true);
+          final file = File('${cacheDir.path}/widget_image.jpg');
+          await file.writeAsBytes(bytes);
+          print('[FCM_WIDGET] ✅ Resim kaydedildi (iOS App Group): ${file.path}');
+          return file.path;
+        }
+      }
+      return null;
+    } catch (e) {
+      print('[FCM_WIDGET] _downloadAndCacheWidgetImage error: $e');
+      return null;
     }
   }
 
@@ -286,6 +364,48 @@ class FirebaseService {
       await HomeWidget.saveWidgetData<String>(_widgetUpdatedAtKey, updatedAt);
       print('[FCM_WIDGET] ✅ widget_updatedAt saved: $updatedAt');
 
+      final imageUrl = data['imageUrl']?.toString().trim() ?? '';
+      await HomeWidget.saveWidgetData<String>(_widgetImageUrlKey, imageUrl);
+
+      // Android için resmi indir ve yerel yol kaydet (Glide async sorununu çözer)
+      String? imagePath;
+      if (imageUrl.isNotEmpty) {
+        try {
+          imagePath = await _downloadAndCacheWidgetImage(imageUrl);
+          if (imagePath != null) {
+            print('[FCM_WIDGET] ✅ Resim indirildi: $imagePath');
+          }
+        } catch (e) {
+          print('[FCM_WIDGET] ⚠️ Resim indirme hatası: $e');
+        }
+      }
+      await HomeWidget.saveWidgetData<String>(_widgetImagePathKey, imagePath ?? '');
+
+      // iOS: App Group içine JSON dosyası yaz (UserDefaults sync sorunlarını aşmak için)
+      if (!kIsWeb && Platform.isIOS) {
+        try {
+          final dir = await FlutterAppGroupDirectory.getAppGroupDirectory(
+            'group.com.siyazilim.periodicallynotification',
+          );
+          if (dir != null) {
+            final cacheDir = Directory('${dir.path}/widget_cache');
+            if (!await cacheDir.exists()) await cacheDir.create(recursive: true);
+            final jsonFile = File('${cacheDir.path}/widget_data.json');
+            final jsonData = {
+              'title': title,
+              'body': body,
+              'itemId': itemId,
+              'updatedAt': updatedAt,
+              'imagePath': imagePath ?? '',
+            };
+            await jsonFile.writeAsString(jsonEncode(jsonData));
+            print('[FCM_WIDGET] ✅ widget_data.json kaydedildi');
+          }
+        } catch (e) {
+          print('[FCM_WIDGET] ⚠️ widget_data.json yazma hatası: $e');
+        }
+      }
+
       // Verify data was saved by reading it back from SharedPreferences
       print('[FCM_WIDGET] === VERIFYING SAVED DATA ===');
       final savedTitle = await HomeWidget.getWidgetData<String>(_widgetTitleKey, defaultValue: '');
@@ -310,6 +430,17 @@ class FirebaseService {
       );
       print('[FCM_WIDGET] ✅ HomeWidget.updateWidget completed');
 
+      // iOS: Native reloadAllTimelines zorla (ofKind bazen çalışmıyor)
+      if (!kIsWeb && Platform.isIOS) {
+        try {
+          const channel = MethodChannel('com.siyazilim.periodicallynotification/widget');
+          await channel.invokeMethod('reloadWidget');
+          print('[FCM_WIDGET] ✅ Native reloadAllTimelines çağrıldı');
+        } catch (e) {
+          print('[FCM_WIDGET] ⚠️ Native reload hatası: $e');
+        }
+      }
+
       print('[FCM_WIDGET] ✅ Home widget updated successfully');
       print('[FCM_WIDGET] === UPDATE WIDGET END ===');
     } catch (e) {
@@ -323,6 +454,42 @@ class FirebaseService {
   Future<void> unsubscribe() async {
     await _messaging.unsubscribeFromTopic(_topic);
     print('Unsubscribed from topic: $_topic');
+  }
+
+  /// Uygulama açıldığında widget'ı güncelle.
+  /// FCM arka planda geldiyse resim indirilememiş olabilir; bu metod düzeltir.
+  /// Cache boşsa asset (motivation.json) ile birleşik veri kullanılır.
+  ///
+  /// Önemli: widget_updatedAt ile karşılaştır - bildirime basıldıktan sonra
+  /// _handleMessage yeni veri yazarken, bu metod eski cache ile overwrite etmesin.
+  static Future<void> refreshWidgetFromCache() async {
+    try {
+      final items = await MotivationService.loadAll();
+      if (items.isEmpty) return;
+      final latest = items.last;
+      final latestUpdated = latest.sentAt ?? DateTime.now().toIso8601String();
+
+      final currentWidgetUpdated = await HomeWidget.getWidgetData<String>(
+        _widgetUpdatedAtKey,
+        defaultValue: '',
+      );
+      if (currentWidgetUpdated != null &&
+          currentWidgetUpdated.isNotEmpty &&
+          latestUpdated.compareTo(currentWidgetUpdated) <= 0) {
+        return;
+      }
+
+      final widgetData = {
+        'title': latest.title,
+        'body': latest.body,
+        'itemId': latest.id,
+        'updatedAt': latestUpdated,
+        'imageUrl': latest.imageUrl ?? '',
+      };
+      await _updateHomeWidget(widgetData);
+    } catch (e) {
+      print('[FCM_WIDGET] refreshWidgetFromCache error: $e');
+    }
   }
 }
 

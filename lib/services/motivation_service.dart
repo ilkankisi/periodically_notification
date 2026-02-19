@@ -6,8 +6,8 @@ import 'motivation_cache_service.dart';
 class MotivationService {
   static const String assetPath = 'assets/data/motivation.json';
 
-  /// Önce yerel önbellekten yükler. Cache boşsa asset'ten yükler.
-  /// Cache varsa asset ile birleştirir (Firebase'den henüz gelmemiş eski veriler için).
+  /// Runtime dosyası: {documents}/data/motivation.json (FCM ile güncellenir)
+  /// Önce runtime'dan okur. Yoksa asset'ten seed edip runtime'a yazar.
   static Future<List<Motivation>> loadAll() async {
     try {
       final cached = await MotivationCacheService.loadFromCache();
@@ -15,10 +15,22 @@ class MotivationService {
         final assetItems = await _loadFromAsset();
         return await MotivationCacheService.mergeWithAsset(assetItems);
       }
-      return await _loadFromAsset();
+      final assetItems = await _loadFromAsset();
+      await _seedRuntimeFromAsset(assetItems);
+      return assetItems;
     } catch (e) {
-      return await _loadFromAsset();
+      final assetItems = await _loadFromAsset();
+      await _seedRuntimeFromAsset(assetItems);
+      return assetItems;
     }
+  }
+
+  /// İlk kurulumda asset verisini runtime dosyasına kopyala
+  static Future<void> _seedRuntimeFromAsset(List<Motivation> items) async {
+    if (items.isEmpty) return;
+    try {
+      await MotivationCacheService.saveItems(items);
+    } catch (_) {}
   }
 
   static Future<List<Motivation>> _loadFromAsset() async {

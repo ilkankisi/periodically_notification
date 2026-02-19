@@ -3,42 +3,53 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
-    android:padding="16dp"
-    android:orientation="vertical">
+    android:padding="12dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical">
 
-    <TextView
-        android:id="@+id/widget_title"
-        android:layout_width="match_parent"
+    <FrameLayout
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/widget_image_placeholder">
+
+        <ImageView
+            android:id="@+id/widget_image"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:contentDescription="Günün içeriği görseli"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Günün İçeriği"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:maxLines="2"
-        android:ellipsize="end" />
-
-    <TextView
-        android:id="@+id/widget_body"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
         android:layout_weight="1"
-        android:text="İçerik yükleniyor..."
-        android:textColor="#E0E0E0"
-        android:textSize="14sp"
-        android:maxLines="4"
-        android:ellipsize="end"
-        android:layout_marginTop="8dp" />
+        android:orientation="vertical"
+        android:minHeight="72dp">
 
-    <TextView
-        android:id="@+id/widget_updated"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text=""
-        android:textColor="#B0B0B0"
-        android:textSize="10sp"
-        android:layout_marginTop="8dp"
-        android:gravity="end" />
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="💡 Günün İçeriği"
+            android:textColor="#42A5F5"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:maxLines="2"
+            android:ellipsize="end" />
 
+        <TextView
+            android:id="@+id/widget_body"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:text="İçerik yükleniyor..."
+            android:textColor="#E5E7EB"
+            android:textSize="12sp"
+            android:maxLines="3"
+            android:ellipsize="end"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
 </LinearLayout>
-
-

@@ -5,29 +5,48 @@ import 'package:path_provider/path_provider.dart';
 import '../models/motivation.dart';
 
 /// Yerel önbellek: Firebase'den gelen motivasyon verilerini yazılabilir dosyada tutar.
-/// Asset (motivation.json) okunamaz - bu service uygulama doküman dizininde JSON dosyası kullanır.
+/// assets/data/motivation.json read-only - runtime'da {documents}/data/motivation.json'a yazılır.
+/// Anasayfa bu runtime dosyasından okur (assets ile aynı yapı).
 class MotivationCacheService {
-  static const String _cacheFileName = 'motivation_cache.json';
+  static const String _cacheFileName = 'data/motivation.json';
+  static const String _legacyCacheFileName = 'motivation_cache.json';
 
   static Future<String> _getCachePath() async {
     final dir = await getApplicationDocumentsDirectory();
     return '${dir.path}/$_cacheFileName';
   }
 
-  /// Yerel önbellekten tüm motivasyonları yükler.
-  static Future<List<Motivation>> loadFromCache() async {
-    try {
-      final path = await _getCachePath();
-      final file = File(path);
-      if (!await file.exists()) return [];
-      final raw = await file.readAsString();
-      if (raw.trim().isEmpty) return [];
-      final decoded = json.decode(raw);
-      if (decoded is! List) return [];
-      return decoded.map((e) => Motivation.fromMap(Map<String, dynamic>.from(e))).toList();
-    } catch (e) {
-      return [];
+  static Future<String> _getLegacyCachePath() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return '${dir.path}/$_legacyCacheFileName';
+  }
+
+  static Future<void> _ensureDataDir() async {
+    final path = await _getCachePath();
+    final file = File(path);
+    if (!await file.parent.exists()) {
+      await file.parent.create(recursive: true);
     }
+  }
+
+  /// Yerel önbellekten tüm motivasyonları yükler.
+  /// Önce {documents}/data/motivation.json, yoksa motivation_cache.json (fallback).
+  static Future<List<Motivation>> loadFromCache() async {
+    for (final path in [
+      await _getCachePath(),
+      await _getLegacyCachePath(),
+    ]) {
+      try {
+        final file = File(path);
+        if (!await file.exists()) continue;
+        final raw = await file.readAsString();
+        if (raw.trim().isEmpty) continue;
+        final decoded = json.decode(raw);
+        if (decoded is! List) continue;
+        return decoded.map((e) => Motivation.fromMap(Map<String, dynamic>.from(e))).toList();
+      } catch (_) {}
+    }
+    return [];
   }
 
   /// Firestore'dan gelen veriyi önbelleğe ekler veya günceller.
@@ -86,10 +105,16 @@ class MotivationCacheService {
   }
 
   static Future<void> _saveToCache(List<Motivation> items) async {
+    await _ensureDataDir();
     final path = await _getCachePath();
     final file = File(path);
     final encoded = json.encode(items.map((m) => m.toMap()).toList());
     await file.writeAsString(encoded);
+  }
+
+  /// Dışarıdan liste kaydetmek için (asset seed vb.)
+  static Future<void> saveItems(List<Motivation> items) async {
+    await _saveToCache(items);
   }
 
   /// Önbelleği asset verisiyle birleştirir (ilk kurulumda cache boş olabilir).

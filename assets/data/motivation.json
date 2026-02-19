@@ -1,16 +1,20 @@
-[{
-	"id": "98L6SWPSbZdHsnqIpYKo",
-	"title": "Atatürk ne dedi",
-	"body": "Yurtta sulh, cihanda sulh.",
-	"order": 1,
-	"sentAt": "2026-02-01T02:40:04.000Z",
-	"image": null
-},
-{
-	"id": "t3Ein6C1ADcKF4FDq5d7",
-	"title": "Örnek Başlık",
-	"body": "Bu bir örnek içerik metnidir. Günün içeriği burada görünecek.",
-	"order": 2,
-	"sentAt": "2026-02-09T02:40:05.000Z",
-	"image": null
-}]
+[
+  {
+    "id": "98L6SWPSbZdHsnqIpYKo",
+    "title": "Atatürk ne dedi",
+    "body": "Yurtta sulh, cihanda sulh.",
+    "order": 1,
+    "sentAt": "2026-01-31T23:40:04.104Z",
+    "image": null,
+    "imageUrl": "https://firebasestorage.googleapis.com/v0/b/periodically-notification.firebasestorage.app/o/IMG_5234.jpg?alt=media&token=b4c7a882-c839-4bba-8bae-ce1d5b6115a4"
+  },
+  {
+    "id": "Z7Aa7DeUdVDQ78igei05",
+    "title": "Atatürk ne dedi",
+    "body": "Dünyada her şey için medeniyet için, hayat için, muvaffakiyet için, en hakiki mürşit ilimdir, fendir.",
+    "order": 2,
+    "sentAt": "2026-02-01T23:40:07.142Z",
+    "image": null,
+    "imageUrl": "https://firebasestorage.googleapis.com/v0/b/periodically-notification.firebasestorage.app/o/IMG_5235.jpg?alt=media&token=2c54e8e0-5114-4776-8635-194de03e2197"
+  }
+]

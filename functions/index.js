@@ -1,5 +1,5 @@
 const {onSchedule} = require("firebase-functions/v2/scheduler");
-const {onCall} = require("firebase-functions/v2/https");
+const {onRequest} = require("firebase-functions/v2/https");
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
@@ -45,27 +45,45 @@ exports.sendDailyWidgetContent = onSchedule(
 
         functions.logger.info(`Looking for item with order: ${nextOrder}`);
 
-        // Step 2: Find item with matching order
+        // Step 2: Find item with matching order (no sent filter)
         const itemsQuery = await db
             .collection("daily_items")
             .where("order", "==", nextOrder)
-            .where("sent", "==", false)
             .limit(1)
             .get();
 
-        if (itemsQuery.empty) {
-          functions.logger.warn(
-              `No unsent item found with order ${nextOrder}`,
-          );
-          return {
-            success: false,
-            error: `No unsent item found with order ${nextOrder}`,
-          };
-        }
+        let itemDoc;
+        let itemData;
+        let itemId;
+        let newNextOrder;
 
-        const itemDoc = itemsQuery.docs[0];
-        const itemData = itemDoc.data();
-        const itemId = itemDoc.id;
+        if (itemsQuery.empty) {
+          // Wrap-around: no item for nextOrder, use smallest order
+          functions.logger.info(
+              `No item for order ${nextOrder}, wrapping to first item`,
+          );
+          const fallbackQuery = await db
+              .collection("daily_items")
+              .orderBy("order")
+              .limit(1)
+              .get();
+          if (fallbackQuery.empty) {
+            functions.logger.error("daily_items collection is empty");
+            return {
+              success: false,
+              error: "No items in daily_items collection",
+            };
+          }
+          itemDoc = fallbackQuery.docs[0];
+          itemData = itemDoc.data();
+          itemId = itemDoc.id;
+          newNextOrder = (itemData.order || 0) + 1;
+        } else {
+          itemDoc = itemsQuery.docs[0];
+          itemData = itemDoc.data();
+          itemId = itemDoc.id;
+          newNextOrder = nextOrder + 1;
+        }
 
         functions.logger.info(`Found item: ${itemId}`, {
           title: itemData.title,
@@ -74,14 +92,10 @@ exports.sendDailyWidgetContent = onSchedule(
 
         // Step 3: Use transaction to atomically update item and state
         await db.runTransaction(async (transaction) => {
-          // Mark item as sent
+          // Update sentAt only (no sent field)
           transaction.update(itemDoc.ref, {
-            sent: true,
             sentAt: new Date(),
           });
-
-          // Increment nextOrder
-          const newNextOrder = nextOrder + 1;
           transaction.update(stateRef, {
             nextOrder: newNextOrder,
             lastSentAt: new Date(),
@@ -89,8 +103,7 @@ exports.sendDailyWidgetContent = onSchedule(
           });
 
           functions.logger.info(
-              `Transaction prepared: item marked as sent, ` +
-              `nextOrder=${newNextOrder}`,
+              `Transaction prepared: sentAt updated, nextOrder=${newNextOrder}`,
           );
         });
 
@@ -112,6 +125,7 @@ exports.sendDailyWidgetContent = onSchedule(
             title: itemData.title || "",
             body: itemData.body || "",
             updatedAt: new Date().toISOString(),
+            imageUrl: itemData.imageUrl || "",
           },
           topic: "daily_widget_all",
           android: {
@@ -145,6 +159,7 @@ exports.sendDailyWidgetContent = onSchedule(
             title: itemData.title || "",
             body: itemData.body || "",
             updatedAt: new Date().toISOString(),
+            imageUrl: itemData.imageUrl || "",
           },
           topic: "daily_widget_all",
           android: {
@@ -217,21 +232,14 @@ exports.sendDailyWidgetContent = onSchedule(
 
 /**
  * Helper function to manually trigger daily content send (for testing)
- * Can be called via HTTP or from Firebase Console
+ * GET/POST: http://127.0.0.1:5001/periodically-notification/us-central1/manualSendDailyContent
  */
-exports.manualSendDailyContent = onCall(
+exports.manualSendDailyContent = onRequest(
     {
       region: "us-central1",
+      cors: true,
     },
-    async (request) => {
-      // Optional: Add authentication check here
-      // if (!context.auth) {
-      //   throw new functions.https.HttpsError(
-      //       'unauthenticated',
-      //       'Must be authenticated'
-      //   );
-      // }
-
+    async (req, res) => {
       const functions = require("firebase-functions");
       const logger = require("firebase-functions/logger");
       logger.info("Manual send triggered");
@@ -245,10 +253,8 @@ exports.manualSendDailyContent = onCall(
         const stateDoc = await stateRef.get();
 
         if (!stateDoc.exists) {
-          throw new functions.https.HttpsError(
-              "not-found",
-              "State document not found",
-          );
+          res.status(404).json({success: false, error: "State document not found"});
+          return;
         }
 
         const state = stateDoc.data();
@@ -257,28 +263,44 @@ exports.manualSendDailyContent = onCall(
         const itemsQuery = await db
             .collection("daily_items")
             .where("order", "==", nextOrder)
-            .where("sent", "==", false)
             .limit(1)
             .get();
 
-        if (itemsQuery.empty) {
-          throw new functions.https.HttpsError(
-              "not-found",
-              `No unsent item found with order ${nextOrder}`,
-          );
-        }
+        let itemDoc;
+        let itemData;
+        let itemId;
+        let newNextOrder;
 
-        const itemDoc = itemsQuery.docs[0];
-        const itemData = itemDoc.data();
-        const itemId = itemDoc.id;
+        if (itemsQuery.empty) {
+          const fallbackQuery = await db
+              .collection("daily_items")
+              .orderBy("order")
+              .limit(1)
+              .get();
+          if (fallbackQuery.empty) {
+            res.status(404).json({
+              success: false,
+              error: "No items in daily_items collection",
+            });
+            return;
+          }
+          itemDoc = fallbackQuery.docs[0];
+          itemData = itemDoc.data();
+          itemId = itemDoc.id;
+          newNextOrder = (itemData.order || 0) + 1;
+        } else {
+          itemDoc = itemsQuery.docs[0];
+          itemData = itemDoc.data();
+          itemId = itemDoc.id;
+          newNextOrder = nextOrder + 1;
+        }
 
         await db.runTransaction(async (transaction) => {
           transaction.update(itemDoc.ref, {
-            sent: true,
             sentAt: new Date(),
           });
           transaction.update(stateRef, {
-            nextOrder: nextOrder + 1,
+            nextOrder: newNextOrder,
             lastSentAt: new Date(),
             lastSentItemId: itemId,
           });
@@ -297,24 +319,25 @@ exports.manualSendDailyContent = onCall(
             title: itemData.title || "",
             body: itemData.body || "",
             updatedAt: new Date().toISOString(),
+            imageUrl: itemData.imageUrl || "",
           },
           topic: "daily_widget_all",
         };
 
         const messageId = await messaging.send(notificationMessage);
 
-        return {
+        res.status(200).json({
           success: true,
           itemId: itemId,
           order: itemData.order,
           messageId: messageId,
-        };
+        });
       } catch (error) {
         logger.error("Error in manualSendDailyContent", error);
-        throw new functions.https.HttpsError(
-            "internal",
-            error.message,
-        );
+        res.status(500).json({
+          success: false,
+          error: error.message,
+        });
       }
     },
 );

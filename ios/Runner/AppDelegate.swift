@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import UserNotifications
 import Foundation
+import WidgetKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -36,6 +37,25 @@ import Foundation
       self.flutterEngine = FlutterEngine(name: "my_engine")
       self.flutterEngine?.run()
       GeneratedPluginRegistrant.register(with: self.flutterEngine!)
+
+      // Widget yenileme method channel
+      let widgetChannel = FlutterMethodChannel(
+        name: "com.siyazilim.periodicallynotification/widget",
+        binaryMessenger: self.flutterEngine!.binaryMessenger
+      )
+      widgetChannel.setMethodCallHandler { call, result in
+        guard call.method == "reloadWidget" else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        if #available(iOS 14.0, *) {
+          WidgetCenter.shared.reloadAllTimelines()
+          print("[APP-SWIFT] reloadAllTimelines() çağrıldı")
+          result(true)
+        } else {
+          result(false)
+        }
+      }
 
       let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
       
@@ -108,6 +128,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   
   func sceneDidBecomeActive(_ scene: UIScene) {
     print("[APP-SWIFT] Scene did become active")
+    if #available(iOS 14.0, *) {
+      WidgetCenter.shared.reloadAllTimelines()
+    }
   }
   
   func sceneWillResignActive(_ scene: UIScene) {

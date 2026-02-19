@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/motivation.dart';
+import '../services/firebase_service.dart';
 import '../services/motivation_service.dart';
+import 'content_detail_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -16,15 +19,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<Motivation> items = [];
   bool loading = true;
 
+  StreamSubscription<void>? _contentUpdateSub;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _load();
+    _contentUpdateSub = FirebaseService.onContentUpdated.stream.listen((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    });
   }
 
   @override
   void dispose() {
+    _contentUpdateSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -42,6 +51,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       items = all;
       loading = false;
     });
+    // Widget'ı güncelle - FCM arka planda geldiyse resim burada indirilir
+    FirebaseService.refreshWidgetFromCache();
   }
 
   @override
@@ -88,8 +99,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // big card
-                      Container(
+                      // big card - tıklanabilir
+                      GestureDetector(
+                        onTap: latest != null
+                            ? () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ContentDetailPage(item: latest),
+                                  ),
+                                )
+                            : null,
+                        child: Container(
                         width: double.infinity,
                         decoration: BoxDecoration(
                           color: const Color(0xFF1F1F1F),
@@ -148,11 +168,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     width: double.infinity,
                                     height: 240,
                                     padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(color: const Color(0xFFCCCCCC), borderRadius: BorderRadius.circular(12)),
+                                    decoration: BoxDecoration(color: const Color(0xFF1F1F1F), borderRadius: BorderRadius.circular(12)),
                                     child: SingleChildScrollView(
                                               child: Text(
                                               latest?.body ?? 'Bu bir örnek içerik metnidir. Günün içeriği burada görünecek... Bu alan günün en önemli bilgilerini, güncel gelişmeleri ve sizin için seçtiğimiz özel makaleyi barındırır. Bilgi dolu bir gün dileriz.',
-                                              style: const TextStyle(color: Color(0xFFD1D5DB), fontSize: 16),
+                                              style: const TextStyle(color:  Colors.white, fontSize: 16),
                                             ),
                                     ),
                                   ),
@@ -173,6 +193,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           ],
                         ),
                       ),
+                    ),
                       const SizedBox(height: 24),
                       // Previous days header
                       Row(
@@ -193,7 +214,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             // show in reverse chronological order excluding latest
                             final reversed = items.reversed.toList();
                             final item = reversed[index + 1];
-                            return _smallCard(item);
+                            return GestureDetector(
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ContentDetailPage(item: item),
+                                ),
+                              ),
+                              child: _smallCard(item),
+                            );
                           },
                         ),
                       ),
@@ -267,19 +296,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ],
       ),
     );
-  }
-
-  Widget? _maybeImageFromBase64(String? base64Str) {
-    if (base64Str == null) return null;
-    try {
-      final bytes = base64Decode(base64Str);
-      return ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        child: Image.memory(bytes, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
-      );
-    } catch (e) {
-      return null;
-    }
   }
 
   Widget _navButton(IconData icon, String label, {bool active = false}) {

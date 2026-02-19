@@ -3,25 +3,46 @@ package com.siyazilim.periodicallynotification.widget
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
-import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.widget.RemoteViews
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.resource.bitmap.RoundedCorners
+import com.bumptech.glide.request.target.AppWidgetTarget
 import com.siyazilim.periodicallynotification.R
-import java.text.SimpleDateFormat
-import java.util.*
+import java.io.File
 
 /**
  * Android Widget Provider for Daily Content
  * Reads data from SharedPreferences (set by home_widget plugin)
- * and displays it in the home screen widget
+ * and displays it in the home screen widget with Material 3 dark theme
  */
 class DailyWidgetProvider : AppWidgetProvider() {
 
     companion object {
-        // home_widget package uses FlutterSharedPreferences
-        private const val PREFS_NAME = "FlutterSharedPreferences"
-        private const val WIDGET_TITLE_KEY = "flutter.widget_title"
-        private const val WIDGET_BODY_KEY = "flutter.widget_body"
-        private const val WIDGET_UPDATED_AT_KEY = "flutter.widget_updatedAt"
+        private const val WIDGET_IMAGE_PATH_KEY = "widget_imagePath"
+    }
+
+    /** RemoteViews bitmap limit (~500KB) - küçük ölçekle */
+    private fun loadScaledBitmap(file: File, maxW: Int, maxH: Int): Bitmap? {
+        val opts = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        BitmapFactory.decodeFile(file.absolutePath, opts)
+        val w = opts.outWidth
+        val h = opts.outHeight
+        if (w <= 0 || h <= 0) return null
+        var sampleSize = 1
+        while (w / sampleSize > maxW || h / sampleSize > maxH) sampleSize *= 2
+        val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        val bitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOpts) ?: return null
+        val scale = minOf(maxW.toFloat() / bitmap.width, maxH.toFloat() / bitmap.height, 1f)
+        if (scale >= 1f) return bitmap
+        val m = Matrix().apply { postScale(scale, scale) }
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, m, true).also {
+            if (it != bitmap) bitmap.recycle()
+        }
     }
 
     override fun onUpdate(
@@ -74,8 +95,10 @@ class DailyWidgetProvider : AppWidgetProvider() {
         
         var title: String? = null
         var body: String? = null
+        var imagePath: String? = null
+        var imageUrl: String? = null
         var updatedAt: String? = null
-        
+
         // Try each SharedPreferences file
         for (prefsName in possiblePrefsNames) {
             val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -109,13 +132,27 @@ class DailyWidgetProvider : AppWidgetProvider() {
                 "flutter.home_widget.widget_body.string"
             )
             val possibleUpdatedKeys = listOf(
-                "widget_updatedAt",  // This is what home_widget package uses!
+                "widget_updatedAt",
                 "flutter.widget_updatedAt",
                 "flutter.home_widget.widget_updatedAt",
                 "flutter.home_widget.widget_updatedAt.String",
                 "flutter.home_widget.widget_updatedAt.string"
             )
-            
+            val possibleImagePathKeys = listOf(
+                "widget_imagePath",
+                "flutter.widget_imagePath",
+                "flutter.home_widget.widget_imagePath",
+                "flutter.home_widget.widget_imagePath.String",
+                "flutter.home_widget.widget_imagePath.string"
+            )
+            val possibleImageUrlKeys = listOf(
+                "widget_imageUrl",
+                "flutter.widget_imageUrl",
+                "flutter.home_widget.widget_imageUrl",
+                "flutter.home_widget.widget_imageUrl.String",
+                "flutter.home_widget.widget_imageUrl.string"
+            )
+
             // Try to find title
             if (title == null) {
                 for (key in possibleTitleKeys) {
@@ -146,15 +183,35 @@ class DailyWidgetProvider : AppWidgetProvider() {
             if (updatedAt == null) {
                 for (key in possibleUpdatedKeys) {
                     val value = prefs.getString(key, null)
-                    android.util.Log.e("DailyWidget", "  Trying updatedAt key '$key': ${if (value != null) "FOUND: $value" else "not found"}")
                     if (value != null) {
                         updatedAt = value
-                        android.util.Log.e("DailyWidget", "✅ Found updatedAt in $prefsName with key $key: $updatedAt")
                         break
                     }
                 }
             }
-            
+
+            // Try to find imagePath (yerel dosya - Flutter tarafından indirilir)
+            if (imagePath == null) {
+                for (key in possibleImagePathKeys) {
+                    val value = prefs.getString(key, null)
+                    if (value != null && value.isNotEmpty()) {
+                        imagePath = value
+                        android.util.Log.e("DailyWidget", "✅ Found imagePath: $imagePath")
+                        break
+                    }
+                }
+            }
+            // Try to find imageUrl (fallback - örn. arka planda indirme başarısız olduysa)
+            if (imageUrl == null) {
+                for (key in possibleImageUrlKeys) {
+                    val value = prefs.getString(key, null)
+                    if (value != null && value.isNotEmpty()) {
+                        imageUrl = value
+                        break
+                    }
+                }
+            }
+
             android.util.Log.e("DailyWidget", "=== Finished checking $prefsName ===")
             
             // If we found all values, break
@@ -166,47 +223,58 @@ class DailyWidgetProvider : AppWidgetProvider() {
         // Set defaults if not found
         title = title ?: "Günün İçeriği"
         body = body ?: "İçerik yükleniyor..."
-        
-        android.util.Log.e("DailyWidget", "=== WIDGET UPDATE START ===")
-        android.util.Log.e("DailyWidget", "Final Title: $title")
-        android.util.Log.e("DailyWidget", "Final Body: $body")
-        android.util.Log.e("DailyWidget", "Final UpdatedAt: $updatedAt")
 
-        // Create RemoteViews
+        // Create RemoteViews - Material 3 dark theme layout
         val views = RemoteViews(context.packageName, R.layout.daily_widget)
-        
-        android.util.Log.e("DailyWidget", "Setting widget_title to: $title")
-        android.util.Log.e("DailyWidget", "Setting widget_body to: $body")
-        
-        // Set text
-        views.setTextViewText(R.id.widget_title, title)
-        views.setTextViewText(R.id.widget_body, body)
-        
-        // Format and set updated time
-        val updatedText = if (updatedAt != null) {
-            try {
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
-                dateFormat.timeZone = TimeZone.getTimeZone("UTC")
-                val date = dateFormat.parse(updatedAt)
-                if (date != null) {
-                    val displayFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-                    "Son güncelleme: ${displayFormat.format(date)}"
-                } else {
-                    ""
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("DailyWidget", "Error parsing date: $e")
-                ""
-            }
-        } else {
-            ""
-        }
-        views.setTextViewText(R.id.widget_updated, updatedText)
-        
-        android.util.Log.e("DailyWidget", "Updated text set to: $updatedText")
 
-        // Update widget - this should trigger visual update
-        android.util.Log.e("DailyWidget", "Calling updateAppWidget for widget ID: $appWidgetId")
+        // Title with lightbulb emoji (Günün İçeri... style)
+        val displayTitle = "💡 $title"
+        views.setTextViewText(R.id.widget_title, displayTitle)
+        views.setTextViewText(R.id.widget_body, body)
+
+        // Image: 1) Yerel dosyadan senkron yükle (tercih), 2) Yoksa URL ile Glide (fallback)
+        var imageShown = false
+        val pathsToTry = mutableListOf<String>()
+        if (!imagePath.isNullOrEmpty()) pathsToTry.add(imagePath)
+        pathsToTry.add(context.filesDir.absolutePath + "/widget_cache/widget_image.jpg")
+        pathsToTry.add(context.getDir("app_flutter", Context.MODE_PRIVATE).absolutePath + "/widget_cache/widget_image.jpg")
+        pathsToTry.add(context.cacheDir.absolutePath + "/widget_cache/widget_image.jpg")
+
+        for (path in pathsToTry.distinct()) {
+            val file = File(path)
+            if (file.exists()) {
+                try {
+                    val bitmap = loadScaledBitmap(file, 216, 216)
+                    if (bitmap != null) {
+                        views.setViewVisibility(R.id.widget_image, android.view.View.VISIBLE)
+                        views.setImageViewBitmap(R.id.widget_image, bitmap)
+                        imageShown = true
+                        android.util.Log.e("DailyWidget", "✅ Image loaded from: $path")
+                        bitmap.recycle()
+                        break
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("DailyWidget", "Image load error: ${e.message}")
+                }
+            }
+        }
+        if (!imageShown && !imageUrl.isNullOrEmpty()) {
+            views.setViewVisibility(R.id.widget_image, android.view.View.VISIBLE)
+            try {
+                val awt = AppWidgetTarget(context, R.id.widget_image, views, appWidgetId)
+                Glide.with(context.applicationContext)
+                    .asBitmap()
+                    .load(imageUrl)
+                    .transform(RoundedCorners(48))
+                    .into(awt)
+            } catch (e: Exception) {
+                android.util.Log.e("DailyWidget", "Glide fallback error: ${e.message}")
+                views.setViewVisibility(R.id.widget_image, android.view.View.GONE)
+            }
+        } else if (!imageShown) {
+            views.setViewVisibility(R.id.widget_image, android.view.View.GONE)
+        }
+
         appWidgetManager.updateAppWidget(appWidgetId, views)
         android.util.Log.e("DailyWidget", "Widget updated successfully!")
         android.util.Log.e("DailyWidget", "Widget ID: $appWidgetId, Title: $title, Body: $body")
