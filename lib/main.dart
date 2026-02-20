@@ -4,24 +4,43 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'services/firebase_service.dart';
 import 'package:home_widget/home_widget.dart';
 import 'screens/home_page.dart';
+import 'screens/explore_page.dart';
+import 'screens/saved_page.dart';
+import 'widgets/bottom_nav_bar.dart';
 
 void appLog(String message) {
   print('[APP-DART] $message');
 }
 
+Future<void> _initializeFirebaseWithRetry({int maxAttempts = 3}) async {
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      appLog('Firebase initialize deneme $attempt/$maxAttempts...');
+      await Firebase.initializeApp();
+      appLog('Firebase initialize tamamlandı');
+      return;
+    } on Exception catch (e) {
+      final isChannelError = e.toString().contains('channel-error') ||
+          e.toString().contains('FirebaseCoreHostApi');
+      if (isChannelError && attempt < maxAttempts) {
+        appLog('Kanal henüz hazır değil, ${200 * attempt}ms sonra tekrar denenecek...');
+        await Future<void>.delayed(Duration(milliseconds: 200 * attempt));
+      } else {
+        rethrow;
+      }
+    }
+  }
+}
+
 void main() async {
-  
-  
   WidgetsFlutterBinding.ensureInitialized();
   appLog('main() başladı');
   try {
-    appLog('Firebase initialize başlanıyor...');
-    await Firebase.initializeApp();
-    appLog('Firebase initialize tamamlandı');
-    
+    await _initializeFirebaseWithRetry();
+
     await FirebaseService.initialize();
     appLog('FirebaseService setup tamamlandı');
-    
+
     runApp(const MyApp());
     appLog('runApp() tamamlandı');
   } catch (e, st) {
@@ -110,7 +129,7 @@ class _MyAppState extends State<MyApp> {
       return MaterialApp(
         title: 'Periodically Notification',
         debugShowCheckedModeBanner: false,
-        home: const HomePage(),
+        home: const _MainShell(),
       );
     } catch (e, st) {
       appLog('ERROR _MyAppState.build: $e');
@@ -127,5 +146,63 @@ class _MyAppState extends State<MyApp> {
   void dispose() {
     appLog('_MyAppState.dispose() çağrıldı');
     super.dispose();
+  }
+}
+
+/// Ana Sayfa / Keşfet sekmeleri ve ortak alt navigasyon.
+class _MainShell extends StatefulWidget {
+  const _MainShell();
+
+  @override
+  State<_MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<_MainShell> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF121212),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          HomePage(showBottomBar: false, onTabTap: _onTabTap),
+          ExplorePage(showBottomBar: false, onTabTap: _onTabTap),
+          SavedPage(showBottomBar: false, onTabTap: _onTabTap),
+          _PlaceholderPage(title: 'Profil', onTabTap: _onTabTap),
+        ],
+      ),
+      bottomNavigationBar: BottomNavBar(
+        activeIndex: _currentIndex,
+        onTabTap: _onTabTap,
+      ),
+    );
+  }
+
+  void _onTabTap(int index) {
+    if (index == _currentIndex) return;
+    setState(() => _currentIndex = index);
+  }
+}
+
+class _PlaceholderPage extends StatelessWidget {
+  const _PlaceholderPage({required this.title, required this.onTabTap});
+
+  final String title;
+  final ValueChanged<int> onTabTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF121212),
+      body: Center(
+        child: Text(
+          title,
+          style: const TextStyle(color: Colors.white, fontSize: 18),
+        ),
+      ),
+      bottomNavigationBar: BottomNavBar(activeIndex: 3, onTabTap: onTabTap),
+    );
   }
 }

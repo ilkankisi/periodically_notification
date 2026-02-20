@@ -103,7 +103,56 @@ struct DailyWidgetProvider: TimelineProvider {
 
 struct DailyWidgetEntryView: View {
     var entry: DailyWidgetProvider.Entry
-    
+    @Environment(\.widgetFamily) var family
+
+    private var imageSize: CGFloat {
+        switch family {
+        case .systemSmall: return 56
+        case .systemMedium: return 72
+        default: return 56
+        }
+    }
+
+    private var titleFontSize: CGFloat {
+        switch family {
+        case .systemSmall: return 12
+        case .systemMedium: return 14
+        default: return 12
+        }
+    }
+
+    private var bodyFontSize: CGFloat {
+        switch family {
+        case .systemSmall: return 11
+        case .systemMedium: return 12
+        default: return 11
+        }
+    }
+
+    private var titleLineLimit: Int {
+        switch family {
+        case .systemSmall: return 2
+        case .systemMedium: return 2
+        default: return 2
+        }
+    }
+
+    private var bodyLineLimit: Int {
+        switch family {
+        case .systemSmall: return 2
+        case .systemMedium: return 3
+        default: return 2
+        }
+    }
+
+    private var layoutSpacing: CGFloat {
+        family == .systemSmall ? 10 : 12
+    }
+
+    private var layoutPadding: CGFloat {
+        family == .systemSmall ? 10 : 12
+    }
+
     private var widgetImage: Image? {
         let fm = FileManager.default
         let pathsToTry: [String] = {
@@ -125,29 +174,29 @@ struct DailyWidgetEntryView: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: layoutSpacing) {
             if let img = widgetImage {
                 img
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 72, height: 72)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .frame(width: imageSize, height: imageSize)
+                    .clipShape(RoundedRectangle(cornerRadius: imageSize * 0.22))
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text("💡 \(entry.title)")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: titleFontSize, weight: .bold))
                     .foregroundColor(Color(red: 0.26, green: 0.65, blue: 0.96))
-                    .lineLimit(2)
-                
+                    .lineLimit(titleLineLimit)
+
                 Text(entry.body)
-                    .font(.system(size: 12))
+                    .font(.system(size: bodyFontSize))
                     .foregroundColor(Color(red: 0.9, green: 0.91, blue: 0.92))
-                    .lineLimit(3)
+                    .lineLimit(bodyLineLimit)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(12)
+        .padding(layoutPadding)
         .modifier(WidgetBackgroundModifier())
     }
 }
@@ -168,17 +217,23 @@ private struct WidgetBackgroundModifier: ViewModifier {
 }
 
 struct DailyWidget_Previews: PreviewProvider {
-    static var previews: some View {
-        DailyWidgetEntryView(
-            entry: DailyWidgetEntry(
-                date: Date(),
-                title: "Günün İçeriği",
-                body: "Karanlık modda bile okunaklı ve şık bir görünüm sunan Material 3 tasarımı ile",
-                imageUrl: nil,
-                imagePath: nil,
-                updatedAt: "2024-01-15T09:00:00.000Z"
-            )
+    static var previewEntry: DailyWidgetEntry {
+        DailyWidgetEntry(
+            date: Date(),
+            title: "Günün İçeriği",
+            body: "Karanlık modda bile okunaklı ve şık bir görünüm sunan Material 3 tasarımı ile",
+            imageUrl: nil,
+            imagePath: nil,
+            updatedAt: "2024-01-15T09:00:00.000Z"
         )
-        .previewContext(WidgetPreviewContext(family: .systemSmall))
+    }
+
+    static var previews: some View {
+        Group {
+            DailyWidgetEntryView(entry: previewEntry)
+                .previewContext(WidgetPreviewContext(family: .systemSmall))
+            DailyWidgetEntryView(entry: previewEntry)
+                .previewContext(WidgetPreviewContext(family: .systemMedium))
+        }
     }
 }

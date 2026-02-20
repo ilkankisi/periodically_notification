@@ -2,7 +2,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -10,6 +9,7 @@ import 'package:flutter_app_group_directory/flutter_app_group_directory.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import '../models/motivation.dart';
 import 'motivation_cache_service.dart';
 import 'motivation_service.dart';
 
@@ -120,14 +120,55 @@ class FirebaseService {
           },
         );
         print('[INIT] ✅ HomeWidget initialized');
+
+        // Widget boşsa motivation.json'dan seed et
+        await _seedWidgetFromAssetIfEmpty();
       } catch (e) {
         print('[INIT] ❌ HomeWidget error: $e');
       }
 
+      // Uygulama ilk açılışında Firestore'daki tüm daily_items'ı cache'e çek
+      await syncDailyItemsFromFirestore();
       print('[INIT] ✅ Firebase initialization complete!');
     } catch (e) {
       print('[INIT] ❌ Critical error: $e');
       rethrow;
+    }
+  }
+
+  /// Uygulama ilk açılışında Firestore'daki tüm daily_items'ı çekip yerel cache'e yazar.
+  /// Böylece anasayfa ve Keşfet sayfası Firebase verisiyle dolar.
+  static Future<void> syncDailyItemsFromFirestore() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('daily_items')
+          .get();
+      final existing = await MotivationCacheService.loadFromCache();
+      final existingById = {for (var m in existing) m.id: m};
+
+      for (final doc in snapshot.docs) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = doc.id;
+        data['docId'] = doc.id;
+        final sentAt = data['sentAt'];
+        if (sentAt != null) {
+          if (sentAt is Timestamp) {
+            data['sentAt'] = sentAt.toDate().toIso8601String();
+          } else if (sentAt is DateTime) {
+            data['sentAt'] = sentAt.toIso8601String();
+          } else {
+            data['sentAt'] = sentAt.toString();
+          }
+        }
+        final m = Motivation.fromMap(data);
+        existingById[m.id] = m;
+      }
+
+      final merged = MotivationCacheService.sortByLatestFirst(existingById.values.toList());
+      await MotivationCacheService.saveItems(merged);
+      print('[INIT] ✅ Synced ${merged.length} daily_items from Firestore to cache');
+    } catch (e) {
+      print('[INIT] ⚠️ syncDailyItemsFromFirestore: $e');
     }
   }
 
@@ -229,6 +270,7 @@ class FirebaseService {
               widgetData['imageUrl'] = itemData['imageUrl'] ?? data['imageUrl'] ?? '';
 
               await MotivationCacheService.upsertFromFirestore(itemId, itemData);
+              await MotivationCacheService.addDeliveredItemId(itemId);
               print('[FCM_WIDGET] ✅ Motivation cache güncellendi');
               print('[FCM_WIDGET] ✅ Firestore data fetched: title=${widgetData['title']}, body=${widgetData['body']}');
             } else {
@@ -251,6 +293,7 @@ class FirebaseService {
                 'sentAt': widgetData['updatedAt'],
               },
             );
+            await MotivationCacheService.addDeliveredItemId(itemId);
             print('[FCM_WIDGET] ✅ Motivation cache (payload) güncellendi');
           }
         }
@@ -288,6 +331,7 @@ class FirebaseService {
         'sentAt': widgetData['updatedAt'],
         'imageUrl': widgetData['imageUrl'],
       });
+      await MotivationCacheService.addDeliveredItemId(itemId);
       print('[FCM_WIDGET] ✅ Cache güncellendi (payload)');
     } catch (e) {
       print('[FCM_WIDGET] ⚠️ Cache payload update error: $e');
@@ -335,6 +379,30 @@ class FirebaseService {
     } catch (e) {
       print('[FCM_WIDGET] _downloadAndCacheWidgetImage error: $e');
       return null;
+    }
+  }
+
+  /// Widget boşsa (hiç veri yoksa) motivation.json'dan ilk veriyi yükle
+  static Future<void> _seedWidgetFromAssetIfEmpty() async {
+    if (kIsWeb) return;
+    try {
+      final savedUpdatedAt = await HomeWidget.getWidgetData<String>(_widgetUpdatedAtKey, defaultValue: '') ?? '';
+      if (savedUpdatedAt.isNotEmpty) return;
+
+      final items = await MotivationService.loadFromAsset();
+      final latest = MotivationService.latest(items);
+      if (latest == null) return;
+
+      print('[INIT] Widget boş, motivation.json\'dan seed ediliyor: ${latest.title}');
+      await _updateHomeWidget({
+        'title': latest.title,
+        'body': latest.body,
+        'itemId': latest.id,
+        'updatedAt': latest.sentAt ?? DateTime.now().toIso8601String(),
+        'imageUrl': latest.imageUrl ?? '',
+      });
+    } catch (e) {
+      print('[INIT] ⚠️ Widget seed hatası: $e');
     }
   }
 
@@ -430,17 +498,6 @@ class FirebaseService {
       );
       print('[FCM_WIDGET] ✅ HomeWidget.updateWidget completed');
 
-      // iOS: Native reloadAllTimelines zorla (ofKind bazen çalışmıyor)
-      if (!kIsWeb && Platform.isIOS) {
-        try {
-          const channel = MethodChannel('com.siyazilim.periodicallynotification/widget');
-          await channel.invokeMethod('reloadWidget');
-          print('[FCM_WIDGET] ✅ Native reloadAllTimelines çağrıldı');
-        } catch (e) {
-          print('[FCM_WIDGET] ⚠️ Native reload hatası: $e');
-        }
-      }
-
       print('[FCM_WIDGET] ✅ Home widget updated successfully');
       print('[FCM_WIDGET] === UPDATE WIDGET END ===');
     } catch (e) {
@@ -466,7 +523,8 @@ class FirebaseService {
     try {
       final items = await MotivationService.loadAll();
       if (items.isEmpty) return;
-      final latest = items.last;
+      final latest = MotivationService.latest(items);
+      if (latest == null) return;
       final latestUpdated = latest.sentAt ?? DateTime.now().toIso8601String();
 
       final currentWidgetUpdated = await HomeWidget.getWidgetData<String>(

@@ -9,7 +9,26 @@ import '../models/motivation.dart';
 /// Anasayfa bu runtime dosyasından okur (assets ile aynı yapı).
 class MotivationCacheService {
   static const String _cacheFileName = 'data/motivation.json';
+
+  /// Dışarıdan sıralama için (loadAll asset path vb.)
+  static List<Motivation> sortByLatestFirst(List<Motivation> list) {
+    final copy = List<Motivation>.from(list);
+    copy.sort(_compareByLatestFirst);
+    return copy;
+  }
+
+  /// En son gönderilen (sentAt) önce gelir; sonra order azalan.
+  static int _compareByLatestFirst(Motivation a, Motivation b) {
+    final aSent = a.sentAt ?? '';
+    final bSent = b.sentAt ?? '';
+    final sentCmp = bSent.compareTo(aSent); // Azalan: yeni önce
+    if (sentCmp != 0) return sentCmp;
+    final aOrder = a.order ?? 0;
+    final bOrder = b.order ?? 0;
+    return bOrder.compareTo(aOrder); // Azalan: büyük order önce
+  }
   static const String _legacyCacheFileName = 'motivation_cache.json';
+  static const String _deliveredIdsFileName = 'data/notification_delivered_ids.json';
 
   static Future<String> _getCachePath() async {
     final dir = await getApplicationDocumentsDirectory();
@@ -43,7 +62,9 @@ class MotivationCacheService {
         if (raw.trim().isEmpty) continue;
         final decoded = json.decode(raw);
         if (decoded is! List) continue;
-        return decoded.map((e) => Motivation.fromMap(Map<String, dynamic>.from(e))).toList();
+        final items = decoded.map((e) => Motivation.fromMap(Map<String, dynamic>.from(e))).toList();
+        items.sort(_compareByLatestFirst);
+        return items;
       } catch (_) {}
     }
     return [];
@@ -88,15 +109,8 @@ class MotivationCacheService {
         updated = [...items, newItem];
       }
 
-      // sentAt veya order'a göre sırala
-      updated.sort((a, b) {
-        final aOrder = a.order ?? 999;
-        final bOrder = b.order ?? 999;
-        if (aOrder != bOrder) return aOrder.compareTo(bOrder);
-        final aSent = a.sentAt ?? '';
-        final bSent = b.sentAt ?? '';
-        return aSent.compareTo(bSent);
-      });
+      // En son gönderilen önce: sentAt azalan, sonra order azalan
+      updated.sort((a, b) => _compareByLatestFirst(a, b));
 
       await _saveToCache(updated);
     } catch (e) {
@@ -125,14 +139,49 @@ class MotivationCacheService {
     final cachedIds = cached.map((m) => m.id).toSet();
     final fromAsset = assetItems.where((m) => !cachedIds.contains(m.id)).toList();
     final merged = [...cached, ...fromAsset];
-    merged.sort((a, b) {
-      final aOrder = a.order ?? 999;
-      final bOrder = b.order ?? 999;
-      if (aOrder != bOrder) return aOrder.compareTo(bOrder);
-      final aSent = a.sentAt ?? '';
-      final bSent = b.sentAt ?? '';
-      return aSent.compareTo(bSent);
-    });
+    merged.sort((a, b) => _compareByLatestFirst(a, b));
     return merged;
+  }
+
+  /// Bildirimle (FCM) kullanıcıya ulaşan içerik id'leri. Anasayfada sadece bunlar gösterilir.
+  static Future<String> _getDeliveredIdsPath() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return '${dir.path}/$_deliveredIdsFileName';
+  }
+
+  static Future<void> _ensureDataDirFor(String path) async {
+    final file = File(path);
+    if (!await file.parent.exists()) {
+      await file.parent.create(recursive: true);
+    }
+  }
+
+  /// FCM ile bildirim geldiğinde bu id kaydedilir. Anasayfa sadece bu id'lerdeki içerikleri listeler.
+  static Future<void> addDeliveredItemId(String itemId) async {
+    if (itemId.isEmpty) return;
+    try {
+      final path = await _getDeliveredIdsPath();
+      await _ensureDataDirFor(path);
+      final set = await getDeliveredItemIds();
+      set.add(itemId);
+      final file = File(path);
+      await file.writeAsString(json.encode(set.toList()));
+    } catch (_) {}
+  }
+
+  /// Bildirimle gelen tüm içerik id'lerini döner.
+  static Future<Set<String>> getDeliveredItemIds() async {
+    try {
+      final path = await _getDeliveredIdsPath();
+      final file = File(path);
+      if (!await file.exists()) return {};
+      final raw = await file.readAsString();
+      if (raw.trim().isEmpty) return {};
+      final decoded = json.decode(raw);
+      if (decoded is! List) return {};
+      return decoded.map((e) => e.toString()).where((s) => s.isNotEmpty).toSet();
+    } catch (_) {
+      return {};
+    }
   }
 }

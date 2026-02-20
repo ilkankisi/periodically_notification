@@ -12,16 +12,16 @@ class MotivationService {
     try {
       final cached = await MotivationCacheService.loadFromCache();
       if (cached.isNotEmpty) {
-        final assetItems = await _loadFromAsset();
+        final assetItems = await loadFromAsset();
         return await MotivationCacheService.mergeWithAsset(assetItems);
       }
-      final assetItems = await _loadFromAsset();
+      final assetItems = await loadFromAsset();
       await _seedRuntimeFromAsset(assetItems);
-      return assetItems;
+      return MotivationCacheService.sortByLatestFirst(assetItems);
     } catch (e) {
-      final assetItems = await _loadFromAsset();
+      final assetItems = await loadFromAsset();
       await _seedRuntimeFromAsset(assetItems);
-      return assetItems;
+      return MotivationCacheService.sortByLatestFirst(assetItems);
     }
   }
 
@@ -33,7 +33,8 @@ class MotivationService {
     } catch (_) {}
   }
 
-  static Future<List<Motivation>> _loadFromAsset() async {
+  /// Asset'ten motivasyon listesi yükle (widget seed için public)
+  static Future<List<Motivation>> loadFromAsset() async {
     try {
       final raw = await rootBundle.loadString(assetPath);
       if (raw.trim().isEmpty) return [];
@@ -49,8 +50,18 @@ class MotivationService {
     }
   }
 
+  /// Anasayfa için: sadece bildirimle (FCM) gelen içerikler. Keşfet tüm cache'i kullanır.
+  static Future<List<Motivation>> loadDeliveredOnly() async {
+    final all = await loadAll();
+    final deliveredIds = await MotivationCacheService.getDeliveredItemIds();
+    if (deliveredIds.isEmpty) return [];
+    final filtered = all.where((m) => deliveredIds.contains(m.id)).toList();
+    return MotivationCacheService.sortByLatestFirst(filtered);
+  }
+
+  /// En son gönderilen içerik (liste sentAt azalan sırada olmalı)
   static Motivation? latest(List<Motivation> list) {
     if (list.isEmpty) return null;
-    return list.last;
+    return list.first;
   }
 }

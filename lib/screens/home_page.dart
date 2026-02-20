@@ -6,10 +6,20 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/motivation.dart';
 import '../services/firebase_service.dart';
 import '../services/motivation_service.dart';
+import '../widgets/header_bar.dart';
+import '../widgets/bottom_nav_bar.dart';
 import 'content_detail_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({
+    super.key,
+    this.showBottomBar = true,
+    this.onTabTap,
+  });
+
+  /// false ise alt navigasyon bar gösterilmez (MainShell kullanıyorsa).
+  final bool showBottomBar;
+  final ValueChanged<int>? onTabTap;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -46,7 +56,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _load() async {
-    final all = await MotivationService.loadAll();
+    // Anasayfada sadece bildirimle (FCM) gelen içerikler
+    final all = await MotivationService.loadDeliveredOnly();
     setState(() {
       items = all;
       loading = false;
@@ -57,37 +68,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final latest = items.isNotEmpty ? items.last : null;
+    final latest = items.isNotEmpty ? items.first : null;
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              height: 64,
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: const BoxDecoration(
-                color: Color(0xFF1F1F1F),
-                border: Border(bottom: BorderSide(color: Colors.white)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: const [
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        'Günün İçeriği',
-                        style: TextStyle(color: Colors.white, fontSize: 18),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 48),
-                ],
-              ),
-            ),
+      body: Column(
+        children: [
+          const HeaderBar(),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _load,
@@ -131,11 +118,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   child: ClipRRect(
                                     borderRadius: const BorderRadius.vertical(top: Radius.circular(27)),
                                     child: latest != null && latest.imageBase64 != null
-                                        ? Image.memory(base64Decode(latest.imageBase64!), fit: BoxFit.cover, width: double.infinity, height: 224)
+                                        ? Image.memory(base64Decode(latest.imageBase64!), fit: BoxFit.fitHeight, width: double.infinity, height: 224)
                                         : (latest != null && latest.imageUrl != null
                                             ? CachedNetworkImage(
                                                 imageUrl: latest.imageUrl!,
-                                                fit: BoxFit.cover,
+                                                fit: BoxFit.fitHeight,
                                                 width: double.infinity,
                                                 height: 224,
                                                 placeholder: (c, u) => Container(color: const Color(0xFF27272A)),
@@ -182,7 +169,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       const Icon(Icons.schedule, color: Color(0xFF6B7280), size: 14),
                                       const SizedBox(width: 8),
                                       Text(
-                                        latest?.sentAt ?? '',
+                                        _formatDate(latest?.sentAt ?? ''),
                                         style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12, fontWeight: FontWeight.w500),
                                       ),
                                     ],
@@ -211,9 +198,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           itemCount: items.length > 1 ? items.length - 1 : 0,
                           separatorBuilder: (_, __) => const SizedBox(width: 16),
                           itemBuilder: (context, index) {
-                            // show in reverse chronological order excluding latest
-                            final reversed = items.reversed.toList();
-                            final item = reversed[index + 1];
+                            // sentAt azalan: items[0]=en son, items[1..]=önceki günler
+                            final item = items[index + 1];
                             return GestureDetector(
                               onTap: () => Navigator.push(
                                 context,
@@ -235,30 +221,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: Container(
-        height: 85,
-        decoration: const BoxDecoration(color: Color(0xFF1F1F1F), border: Border(top: BorderSide(color: Colors.white))),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _navButton(Icons.home, 'Ana Sayfa', active: true),
-                  _navButton(Icons.explore, 'Keşfet'),
-                  _navButton(Icons.bookmark, 'Kaydedilenler'),
-                  _navButton(Icons.person, 'Profil'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(width: 128, height: 4, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(9999))),
-          ],
-        ),
-      ),
+      bottomNavigationBar: widget.showBottomBar
+          ? BottomNavBar(activeIndex: 0, onTabTap: widget.onTabTap)
+          : null,
     );
   }
 
@@ -276,9 +241,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               child: m.imageBase64 != null
-                  ? Image.memory(base64Decode(m.imageBase64!), fit: BoxFit.cover, width: double.infinity, height: 96)
+                  ? Image.memory(base64Decode(m.imageBase64!), fit: BoxFit.fitHeight, width: double.infinity, height: 96)
                   : (m.imageUrl != null
-                      ? CachedNetworkImage(imageUrl: m.imageUrl!, fit: BoxFit.cover, width: double.infinity, height: 96, placeholder: (c, u) => Container(color: const Color(0xFF27272A)), errorWidget: (c, u, e) => Container(color: const Color(0xFF27272A)))
+                      ? CachedNetworkImage(imageUrl: m.imageUrl!, fit: BoxFit.fitHeight, width: double.infinity, height: 96, placeholder: (c, u) => Container(color: const Color(0xFF27272A)), errorWidget: (c, u, e) => Container(color: const Color(0xFF27272A)))
                       : null),
             ),
           ),
@@ -287,7 +252,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(m.sentAt ?? '', style: const TextStyle(color: Color(0xFFFFB74D), fontWeight: FontWeight.w700, fontSize: 10)),
+                Text(_formatDate(m.sentAt ?? ''), style: const TextStyle(color: Color(0xFFFFB74D), fontWeight: FontWeight.w700, fontSize: 10)),
                 const SizedBox(height: 4),
                 Text(m.title, style: const TextStyle(color: Color(0xFFE5E7EB), fontSize: 14)),
               ],
@@ -298,14 +263,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _navButton(IconData icon, String label, {bool active = false}) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: active ? const Color(0xFF2196F3) : const Color(0xFF9CA3AF)),
-        const SizedBox(height: 4),
-        Text(label, style: TextStyle(color: active ? const Color(0xFF2196F3) : const Color(0xFF9CA3AF), fontSize: 10, fontWeight: FontWeight.w500)),
-      ],
-    );
+  String _formatDate(String? sentAt) {
+    if (sentAt == null || sentAt.isEmpty) return '—';
+    try {
+      final parsed = DateTime.tryParse(sentAt);
+      if (parsed != null) {
+        const months = [
+          'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+          'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+        ];
+        return '${parsed.day} ${months[parsed.month - 1]} ${parsed.year}';
+      }
+    } catch (_) {}
+    return sentAt;
   }
+
 }

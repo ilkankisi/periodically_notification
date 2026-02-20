@@ -6,12 +6,33 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/motivation.dart';
+import '../services/saved_items_service.dart';
+import '../widgets/header_bar.dart';
+import '../widgets/bottom_nav_bar.dart';
 
 /// İçerik detay sayfası - Görsel tasarıma uygun makale görünümü
-class ContentDetailPage extends StatelessWidget {
+class ContentDetailPage extends StatefulWidget {
   final Motivation item;
 
   const ContentDetailPage({super.key, required this.item});
+
+  @override
+  State<ContentDetailPage> createState() => _ContentDetailPageState();
+}
+
+class _ContentDetailPageState extends State<ContentDetailPage> {
+  bool _saved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    SavedItemsService.isSaved(widget.item.id).then((v) => setState(() => _saved = v));
+  }
+
+  Future<void> _toggleSaved() async {
+    final nowSaved = await SavedItemsService.toggleSaved(widget.item.id);
+    setState(() => _saved = nowSaved);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,44 +40,35 @@ class ContentDetailPage extends StatelessWidget {
       backgroundColor: const Color(0xFF121212),
       body: Column(
         children: [
-          // Top Navigation Bar - 65px, #1F1F1F
-          Container(
-            width: double.infinity,
-            height: 65,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              color: Color(0xFF1F1F1F),
-              border: Border(bottom: BorderSide(color: Colors.white, width: 1)),
+          HeaderBar(
+            leading: SizedBox(
+              width: 40,
+              height: 40,
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                padding: EdgeInsets.zero,
+                style: IconButton.styleFrom(minimumSize: const Size(24, 24)),
+              ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(width: 40),
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      'Günün İçeriği',
-                      style: GoogleFonts.newsreader(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        height: 1.0,
-                        color: Colors.white,
-                      ),
-                    ),
+                IconButton(
+                  onPressed: _toggleSaved,
+                  icon: Icon(
+                    _saved ? Icons.bookmark : Icons.bookmark_border,
+                    color: Colors.white,
+                    size: 24,
                   ),
+                  padding: EdgeInsets.zero,
+                  style: IconButton.styleFrom(minimumSize: const Size(40, 40)),
                 ),
-                SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: IconButton(
-                    onPressed: () => _shareContent(context),
-                    icon: const Icon(Icons.share, color: Colors.white, size: 24),
-                    padding: EdgeInsets.zero,
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size(24, 24),
-                    ),
-                  ),
+                IconButton(
+                  onPressed: () => _shareContent(context),
+                  icon: const Icon(Icons.share, color: Colors.white, size: 24),
+                  padding: EdgeInsets.zero,
+                  style: IconButton.styleFrom(minimumSize: const Size(40, 40)),
                 ),
               ],
             ),
@@ -64,6 +76,7 @@ class ContentDetailPage extends StatelessWidget {
           // Scrollable content
           Expanded(
             child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -77,7 +90,7 @@ class ContentDetailPage extends StatelessWidget {
                       children: [
                         // Title - Newsreader 32px bold white
                         Text(
-                          item.title,
+                          widget.item.title,
                           style: GoogleFonts.newsreader(
                             fontSize: 32,
                             fontWeight: FontWeight.w700,
@@ -117,7 +130,7 @@ class ContentDetailPage extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(bottom: 24),
                           child: Text(
-                            item.body,
+                            widget.item.body,
                             style: GoogleFonts.notoSans(
                               fontSize: 17,
                               fontWeight: FontWeight.w400,
@@ -143,7 +156,7 @@ class ContentDetailPage extends StatelessWidget {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                _formatDate(item.sentAt),
+                                _formatDate(widget.item.sentAt),
                                 style: GoogleFonts.notoSans(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
@@ -161,28 +174,28 @@ class ContentDetailPage extends StatelessWidget {
               ),
             ),
           ),
-          // Bottom Navigation Bar - #1F1F1F, border-top #2C2C2C
-          _buildBottomNav(context),
+          BottomNavBar(activeIndex: 0, onHomeTap: () => Navigator.pop(context)),
         ],
       ),
     );
   }
 
   Widget _buildHeroImage() {
+    final item = widget.item;
     return SizedBox(
       width: double.infinity,
       height: 288,
       child: item.imageBase64 != null
           ? Image.memory(
               base64Decode(item.imageBase64!),
-              fit: BoxFit.cover,
+              fit: BoxFit.fitHeight,
               width: double.infinity,
               height: 288,
             )
           : (item.imageUrl != null && item.imageUrl!.isNotEmpty
               ? CachedNetworkImage(
                   imageUrl: item.imageUrl!,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.fitHeight,
                   width: double.infinity,
                   height: 288,
                   placeholder: (_, __) => Container(
@@ -211,52 +224,6 @@ class ContentDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomNav(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1F1F1F),
-        border: Border(top: BorderSide(color: Color(0xFF2C2C2C), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _navItem(Icons.home, 'Ana Sayfa', active: true, onTap: () => Navigator.pop(context)),
-          _navItem(Icons.explore, 'Keşfet'),
-          _navItem(Icons.bookmark, 'Kaydedilenler'),
-          _navItem(Icons.person, 'Profil'),
-        ],
-      ),
-    );
-  }
-
-  Widget _navItem(IconData icon, String label, {bool active = false, VoidCallback? onTap}) {
-    final color = active ? const Color(0xFF2094F3) : const Color(0xFF9E9E9E);
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 80,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: active ? FontWeight.w400 : FontWeight.w500,
-                height: 13 / 11,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   String _formatDate(String? sentAt) {
     if (sentAt == null || sentAt.isEmpty) return '—';
     try {
@@ -273,6 +240,7 @@ class ContentDetailPage extends StatelessWidget {
   }
 
   Future<void> _shareContent(BuildContext context) async {
+    final item = widget.item;
     await Share.share(
       '${item.title}\n\n${item.body}',
       subject: item.title,
