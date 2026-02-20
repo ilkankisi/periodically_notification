@@ -170,7 +170,7 @@ class _MainShellState extends State<_MainShell> {
           HomePage(showBottomBar: false, onTabTap: _onTabTap),
           ExplorePage(showBottomBar: false, onTabTap: _onTabTap),
           SavedPage(showBottomBar: false, onTabTap: _onTabTap),
-          _PlaceholderPage(title: 'Profil', onTabTap: _onTabTap),
+          const _PlaceholderPage(title: 'Profil'),
         ],
       ),
       bottomNavigationBar: BottomNavBar(
@@ -187,10 +187,9 @@ class _MainShellState extends State<_MainShell> {
 }
 
 class _PlaceholderPage extends StatelessWidget {
-  const _PlaceholderPage({required this.title, required this.onTabTap});
+  const _PlaceholderPage({required this.title});
 
   final String title;
-  final ValueChanged<int> onTabTap;
 
   @override
   Widget build(BuildContext context) {
@@ -202,7 +201,6 @@ class _PlaceholderPage extends StatelessWidget {
           style: const TextStyle(color: Colors.white, fontSize: 18),
         ),
       ),
-      bottomNavigationBar: BottomNavBar(activeIndex: 3, onTabTap: onTabTap),
     );
   }
 }
