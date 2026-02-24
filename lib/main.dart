@@ -6,6 +6,7 @@ import 'package:home_widget/home_widget.dart';
 import 'screens/home_page.dart';
 import 'screens/explore_page.dart';
 import 'screens/saved_page.dart';
+import 'screens/profile_page.dart';
 import 'widgets/bottom_nav_bar.dart';
 
 void appLog(String message) {
@@ -127,7 +128,7 @@ class _MyAppState extends State<MyApp> {
     try {
       appLog('_MyAppState.build() tamamlandı');
       return MaterialApp(
-        title: 'Periodically Notification',
+        title: 'DAHA',
         debugShowCheckedModeBanner: false,
         home: const _MainShell(),
       );
@@ -170,7 +171,7 @@ class _MainShellState extends State<_MainShell> {
           HomePage(showBottomBar: false, onTabTap: _onTabTap),
           ExplorePage(showBottomBar: false, onTabTap: _onTabTap),
           SavedPage(showBottomBar: false, onTabTap: _onTabTap),
-          const _PlaceholderPage(title: 'Profil'),
+          ProfilePage(showBottomBar: false, onTabTap: _onTabTap),
         ],
       ),
       bottomNavigationBar: BottomNavBar(
@@ -186,21 +187,3 @@ class _MainShellState extends State<_MainShell> {
   }
 }
 
-class _PlaceholderPage extends StatelessWidget {
-  const _PlaceholderPage({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      body: Center(
-        child: Text(
-          title,
-          style: const TextStyle(color: Colors.white, fontSize: 18),
-        ),
-      ),
-    );
-  }
-}

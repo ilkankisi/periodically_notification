@@ -166,6 +166,8 @@ class FirebaseService {
 
       final merged = MotivationCacheService.sortByLatestFirst(existingById.values.toList());
       await MotivationCacheService.saveItems(merged);
+      // Sync edilen tüm ID'leri delivered olarak işaretle - Önceki Günler bölümünün görünmesi için
+      await MotivationCacheService.addDeliveredItemIds(merged.map((m) => m.id));
       print('[INIT] ✅ Synced ${merged.length} daily_items from Firestore to cache');
     } catch (e) {
       print('[INIT] ⚠️ syncDailyItemsFromFirestore: $e');

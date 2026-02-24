@@ -82,38 +82,7 @@ class _SavedPageState extends State<SavedPage> {
               ),
             ),
           ),
-          // Filtre chip'leri
-          SizedBox(
-            height: 40,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              scrollDirection: Axis.horizontal,
-              itemCount: _filters.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final selected = index == _filterIndex;
-                return GestureDetector(
-                  onTap: () => setState(() => _filterIndex = index),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: selected ? const Color(0xFF2094F3) : const Color(0xFF27272A),
-                      borderRadius: BorderRadius.circular(9999),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      _filters[index],
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+         
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF2094F3)))

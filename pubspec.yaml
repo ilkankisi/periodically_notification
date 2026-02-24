@@ -52,6 +52,7 @@ dependencies:
   share_plus: ^10.0.2
   http: ^1.2.0
   flutter_app_group_directory: ^1.1.0
+  image_picker: ^1.0.7
 
 dev_dependencies:
   flutter_test:
@@ -63,6 +64,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.3
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -82,6 +85,7 @@ flutter:
   #   - images/a_dot_ham.jpeg
   assets:
     - assets/data/motivation.json
+    - assets/icon/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -108,3 +112,21 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Uygulama ikonu (logo) değiştirmek için:
+# 1. Logo dosyanızı (tercihen 1024x1024 px PNG) assets/icon/app_icon.png olarak koyun
+# 2. Terminalde: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/icon/app_icon.png"
+  android: true
+  ios: true
+  web:
+    generate: true
+  remove_alpha_ios: true
+
+# Tek splash: daha_splash_mockup.png (native splash, main'den çağrılmaz).
+# Değişiklikten sonra: dart run flutter_native_splash:create
+flutter_native_splash:
+  background_image: assets/icon/daha_splash_mockup.png
+  android_12:
+    background_image: assets/icon/daha_splash_mockup.png

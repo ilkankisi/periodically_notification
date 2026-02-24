@@ -6,9 +6,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/motivation.dart';
 import '../services/motivation_service.dart';
 import '../services/saved_items_service.dart';
+import '../services/search_history_service.dart';
 import '../widgets/header_bar.dart';
 import '../widgets/bottom_nav_bar.dart';
 import 'content_detail_page.dart';
+import 'all_content_list_page.dart';
 
 /// Keşfet sayfası: arama, kategoriler, Trend İçerikler (2x2 grid), Senin İçin Seçtiklerimiz.
 /// Header başlık ortada, profil ve bildirim yok. Anasayfadaki card yapısı kullanılır.
@@ -31,7 +33,10 @@ class _ExplorePageState extends State<ExplorePage> {
   static const _categories = ['Tümü', 'Teknoloji', 'Sanat', 'Tarih', 'Bilim'];
 
   List<Motivation> _items = [];
+  List<String> _searchHistory = [];
   final Set<String> _savedIds = {};
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -39,15 +44,49 @@ class _ExplorePageState extends State<ExplorePage> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Aramaya göre filtre: hem title hem body'de (büyük/küçük harf duyarsız) aranır.
+  List<Motivation> get _filteredItems {
+    if (_searchQuery.isEmpty) return _items;
+    final q = _searchQuery.toLowerCase();
+    return _items.where((m) {
+      final titleMatch = m.title.toLowerCase().contains(q);
+      final bodyMatch = (m.body).toLowerCase().contains(q);
+      return titleMatch || bodyMatch;
+    }).toList();
+  }
+
   Future<void> _load() async {
     final all = await MotivationService.loadAll();
     final entries = await SavedItemsService.getSavedEntries();
     final savedIds = entries.map((e) => e.itemId).toSet();
+    final history = await SearchHistoryService.getHistory();
     setState(() {
       _items = all;
       _savedIds.clear();
       _savedIds.addAll(savedIds);
+      _searchHistory = history;
     });
+  }
+
+  Future<void> _clearSearchHistory() async {
+    await SearchHistoryService.clearHistory();
+    setState(() => _searchHistory = []);
+  }
+
+  Future<void> _addCurrentSearchToHistory() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final q = _searchController.text.trim();
+    if (q.isNotEmpty) {
+      await SearchHistoryService.addSearch(q);
+      final history = await SearchHistoryService.getHistory();
+      if (mounted) setState(() => _searchHistory = history);
+    }
   }
 
   @override
@@ -74,13 +113,17 @@ class _ExplorePageState extends State<ExplorePage> {
                     children: [
                       const SizedBox(height: 16),
                       _buildSearchBar(),
+                      if (_searchHistory.isNotEmpty && _searchQuery.isEmpty) ...[
+                        const SizedBox(height: 12),
+                        _buildSearchHistorySection(),
+                      ],
                       const SizedBox(height: 8),
-                      _buildCategoryChips(),
-                      const SizedBox(height: 24),
                       _buildTrendSection(),
-                      const SizedBox(height: 24),
-                      _buildPicksSection(),
-                      const SizedBox(height: 24),
+                      if (_searchHistory.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _buildPicksSection(),
+                      ],
+                      const SizedBox(height: 8),
                     ],
                   ),
                 ),
@@ -109,16 +152,114 @@ class _ExplorePageState extends State<ExplorePage> {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              'İçerik ara...',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 16,
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+              decoration: InputDecoration(
+                hintText: 'İçerik ara...',
+                hintStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 16,
+                ),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
               ),
+              onChanged: (_) => setState(() => _searchQuery = _searchController.text.trim()),
+              onSubmitted: (_) => _addCurrentSearchToHistory(),
+              onEditingComplete: _addCurrentSearchToHistory,
             ),
           ),
+          if (_searchQuery.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.clear, color: Color(0xFF9CA3AF), size: 20),
+              onPressed: () {
+                _searchController.clear();
+                setState(() => _searchQuery = '');
+              },
+              padding: const EdgeInsets.only(right: 8),
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSearchHistorySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Son Aramalar',
+              style: TextStyle(
+                color: Color(0xFF9CA3AF),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            TextButton(
+              onPressed: () async {
+                await _clearSearchHistory();
+              },
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'Geçmişi temizle',
+                style: TextStyle(color: Color(0xFF2094F3), fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _searchHistory.map((query) {
+            return Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF27272A),
+                borderRadius: BorderRadius.circular(9999),
+                border: Border.all(color: const Color(0xFF3F3F46)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      _searchController.text = query;
+                      setState(() => _searchQuery = query);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 14, top: 8, bottom: 8),
+                      child: Text(
+                        query,
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () async {
+                      await SearchHistoryService.removeSearch(query);
+                      final history = await SearchHistoryService.getHistory();
+                      if (mounted) setState(() => _searchHistory = history);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 4, right: 10, top: 8, bottom: 8),
+                      child: Icon(Icons.close, color: Colors.white.withValues(alpha: 0.7), size: 16),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
@@ -157,7 +298,7 @@ class _ExplorePageState extends State<ExplorePage> {
   }
 
   Widget _buildTrendSection() {
-    final trendItems = _items.take(4).toList();
+    final trendItems = _filteredItems.take(4).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -174,7 +315,12 @@ class _ExplorePageState extends State<ExplorePage> {
             ),
             if (trendItems.isNotEmpty)
               GestureDetector(
-                onTap: () {},
+                onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AllContentListPage(),
+                      ),
+                    ),
                 child: const Text(
                   'Hepsini Gör',
                   style: TextStyle(
@@ -186,9 +332,12 @@ class _ExplorePageState extends State<ExplorePage> {
               ),
           ],
         ),
-        const SizedBox(height: 16),
         trendItems.isEmpty
-            ? _buildEmptySection('Henüz trend içerik yok. Firebase\'den veriler yüklenecek.')
+            ? _buildEmptySection(
+                _searchQuery.isEmpty
+                    ? 'Henüz trend içerik yok. Firebase\'den veriler yüklenecek.'
+                    : 'Aramanızla eşleşen içerik bulunamadı.',
+              )
             : GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -323,8 +472,29 @@ class _ExplorePageState extends State<ExplorePage> {
     );
   }
 
+  /// Arama geçmişindeki terimlere göre kişiselleştirilmiş öneriler (en çok eşleşen ilk 2)
+  List<Motivation> get _picksForUser {
+    if (_searchHistory.isEmpty) return [];
+    final terms = _searchHistory.map((s) => s.toLowerCase()).where((s) => s.length >= 2).toList();
+    if (terms.isEmpty) return _items.take(2).toList();
+    final scored = _items.map((m) {
+      var score = 0;
+      final titleLower = m.title.toLowerCase();
+      final bodyLower = m.body.toLowerCase();
+      for (final t in terms) {
+        if (titleLower.contains(t)) score += 2;
+        if (bodyLower.contains(t)) score += 1;
+      }
+      return MapEntry(m, score);
+    }).where((e) => e.value > 0).toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final matched = scored.map((e) => e.key).take(2).toList();
+    return matched.isNotEmpty ? matched : _items.take(2).toList();
+  }
+
   Widget _buildPicksSection() {
-    final picks = _items.take(2).toList();
+    final picks = _picksForUser;
+    if (picks.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -338,7 +508,11 @@ class _ExplorePageState extends State<ExplorePage> {
         ),
         const SizedBox(height: 16),
         if (picks.isEmpty)
-          _buildEmptySection('Henüz seçilmiş içerik yok. Firebase\'den veriler yüklenecek.')
+          _buildEmptySection(
+            _searchQuery.isEmpty
+                ? 'Henüz seçilmiş içerik yok. Firebase\'den veriler yüklenecek.'
+                : 'Aramanızla eşleşen içerik bulunamadı.',
+          )
         else
           ...picks.map((m) => _buildPickRow(
                 category: 'İÇERİK',

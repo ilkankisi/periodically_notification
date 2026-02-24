@@ -169,6 +169,20 @@ class MotivationCacheService {
     } catch (_) {}
   }
 
+  /// Birden fazla id'yi tek seferde delivered olarak işaretler (Firestore sync için).
+  static Future<void> addDeliveredItemIds(Iterable<String> itemIds) async {
+    final valid = itemIds.where((id) => id.isNotEmpty).toSet();
+    if (valid.isEmpty) return;
+    try {
+      final path = await _getDeliveredIdsPath();
+      await _ensureDataDirFor(path);
+      final set = await getDeliveredItemIds();
+      set.addAll(valid);
+      final file = File(path);
+      await file.writeAsString(json.encode(set.toList()));
+    } catch (_) {}
+  }
+
   /// Bildirimle gelen tüm içerik id'lerini döner.
   static Future<Set<String>> getDeliveredItemIds() async {
     try {
