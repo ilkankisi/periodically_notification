@@ -65,6 +65,7 @@ class _AccountInfoPageState extends State<AccountInfoPage> {
           ),
           Expanded(
             child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.all(24),
               child: Form(
                 key: _formKey,

@@ -1,190 +1,75 @@
-# Periodically Notification - Günlük İçerik Bildirim Sistemi
+# Periodically — DAHA (Flutter)
 
-Firestore'da elle girilen günlük içerikleri, her gün belirli saatte (Europe/Istanbul) tüm kullanıcılara ulaştıran ve iOS + Android home screen widget'lerinde gösteren Flutter uygulaması.
+Günlük motivasyon içeriğini **Go + PostgreSQL** API’sinden ve (iOS’ta) **APNs** ile alan; ana ekran widget’ı olan Flutter uygulaması.
 
-## 🎯 Özellikler
+Bu repoda **Firestore, Cloud Functions, `firebase.json` veya security rules dosyaları yok.** Veri ve zamanlanmış gönderim **`~/Desktop/backendGo`** üzerindedir.
 
-- ✅ **Scheduled Cloud Functions**: Her gün belirli saatte otomatik içerik gönderimi
-- ✅ **FCM Topic Notifications**: Tüm kullanıcılara görünür bildirimler
-- ✅ **iOS WidgetKit**: Home screen widget desteği
-- ✅ **Android Widget**: Home screen widget desteği
-- ✅ **Firestore Integration**: İçerik yönetimi ve queue sistemi
-- ✅ **Guaranteed Delivery**: Görünür bildirimlerle kesin ulaşma garantisi
+## Özellikler
 
-## 📋 Gereksinimler
+- Go REST API: içerik listesi, OAuth, yorumlar, senkron
+- iOS: doğrudan APNs (Firebase Messaging yok)
+- Android: uzak push yok (widget/asset ile çalışmaya devam eder)
+- iOS + Android home screen widget
+
+## Gereksinimler
 
 - Flutter SDK 3.8.1+
-- Firebase Projesi
-- iOS 14.0+ (Widget için)
-- Android API 21+ (Widget için)
-- Node.js 20+ (Cloud Functions için)
+- **Backend:** [backendGo](../backendGo) — PostgreSQL, MinIO, ortam değişkenleri (`backendGo/README.md`)
+- iOS: Xcode, Push capability, APNs anahtarı (sunucu tarafında)
+- iOS 14+ / Android API 23+ (widget hedeflerine göre)
 
-## 🚀 Hızlı Başlangıç
-
-### 1. Firebase Kurulumu
-
-1. [Firebase Console](https://console.firebase.google.com/)'da proje oluşturun
-2. iOS ve Android uygulamalarını ekleyin
-3. `GoogleService-Info.plist` (iOS) ve `google-services.json` (Android) dosyalarını indirin
-4. Dosyaları projeye ekleyin:
-   - `ios/Runner/GoogleService-Info.plist`
-   - `android/app/google-services.json`
-
-### 2. Flutter Bağımlılıkları
+## Hızlı başlangıç
 
 ```bash
+# Backend’i çalıştırın (ayrı repo/klasör)
+cd ~/Desktop/backendGo && go run ./cmd/server
+
+# Uygulama — API adresi
+cd periodically_notification
 flutter pub get
+flutter run --dart-define=API_BASE_URL=http://SUNUCU:8080
 ```
 
-### 3. Cloud Functions
+Günlük push tetikleme (örnek):
 
 ```bash
-cd functions
-npm install
-firebase deploy --only functions
+curl -X POST "http://SUNUCU:8080/api/admin/daily-send" \
+  -H "X-Admin-Secret: $ADMIN_SECRET"
 ```
 
-### 4. Firestore Veri Modeli
+İçerik / JSON / MinIO betikleri: **`backendGo/README.md`** → *Veri ve görsel araçları (CLI)*.
 
-Firebase Console > Firestore'da şu yapıyı oluşturun:
+### iOS widget
 
-**`daily_items` Collection:**
-```json
-{
-  "order": 1,
-  "title": "Günün İçeriği",
-  "body": "İçerik metni burada...",
-  "sent": false,
-  "sentAt": null
-}
-```
+1. `ios/Runner.xcworkspace`
+2. App Group: `group.com.siyazilim.periodicallynotification`
+3. `ios/DailyWidget/` extension
 
-**`daily_state/current` Document:**
-```json
-{
-  "nextOrder": 1,
-  "lastSentAt": null,
-  "lastSentItemId": null
-}
-```
+### Android widget
 
-### 5. iOS Widget Extension
-
-1. Xcode'da `ios/Runner.xcworkspace` açın
-2. File > New > Target > Widget Extension
-3. Product Name: `DailyWidget`
-4. `ios/DailyWidget/` klasöründeki Swift dosyalarını extension'a kopyalayın
-5. App Group ayarlarını yapın: `group.com.siyazilim.periodicallynotification`
-
-### 6. Çalıştırma
-
-```bash
-# iOS
-flutter run -d ios
-
-# Android
-flutter run -d android
-```
-
-## 📚 Dokümantasyon
-
-- **[SETUP_GUIDE.md](SETUP_GUIDE.md)**: Detaylı kurulum rehberi
-- **[TEST_PLAN.md](TEST_PLAN.md)**: Test senaryoları ve kontrol listesi
-
-## 🏗️ Mimari
-
-### Veri Akışı
-
-1. **Firestore**: Elle girilen günlük içerikler (`daily_items`)
-2. **Cloud Function**: Scheduled function her gün saat 09:00 (Europe/Istanbul) çalışır
-3. **FCM Topic**: `daily_widget_all` topic'ine bildirim gönderilir
-4. **Flutter App**: FCM mesajını alır, `home_widget` ile shared storage'a yazar
-5. **Widget**: Shared storage'dan veriyi okur ve gösterir
-
-### Güvenilirlik
-
-- **Kesin ulaşma**: Görünür FCM bildirimleri (notification payload)
-- **Best-effort**: Widget otomatik güncellemesi (data-only payload)
-- **Fallback**: Bildirime dokununca uygulama açılır ve widget güncellenir
-
-## 🔧 Yapılandırma
-
-### Scheduled Function Saati
-
-`functions/index.js` dosyasında:
-
-```javascript
-schedule: "0 9 * * *", // 9:00 AM UTC = 12:00 PM Europe/Istanbul
-timeZone: "Europe/Istanbul",
-```
-
-### FCM Topic
-
-Varsayılan topic: `daily_widget_all`
-
-İleride dil desteği için:
-- `daily_widget_tr`
-- `daily_widget_en`
-
-## 📱 Widget Özelleştirme
-
-### iOS Widget
-
-`ios/DailyWidget/DailyWidget.swift` dosyasını düzenleyin.
-
-### Android Widget
-
+- `android/app/src/main/kotlin/.../widget/DailyWidgetProvider.kt`
 - Layout: `android/app/src/main/res/layout/daily_widget.xml`
-- Provider: `android/app/src/main/kotlin/.../widget/DailyWidgetProvider.kt`
 
-## 🧪 Test
+## Dokümantasyon
 
-Detaylı test planı için [TEST_PLAN.md](TEST_PLAN.md) dosyasına bakın.
+- [backendGo/README.md](../backendGo/README.md) — API, APNs, migration, CLI
+- [docs/FLUTTER_BACKEND_INTEGRATION.md](docs/FLUTTER_BACKEND_INTEGRATION.md)
+- [SETUP_GUIDE.md](SETUP_GUIDE.md) — **kısmen güncellenmemiş geçmiş adımlar içerebilir;** kaynak olarak backendGo README önceliklidir.
+- [TEST_PLAN.md](TEST_PLAN.md), [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)
 
-Manuel test için:
+## Mimari (özet)
 
-```bash
-# Firebase Console > Functions > manualSendDailyContent
-# veya Firebase CLI:
-firebase functions:shell
-> manualSendDailyContent()
-```
+1. **PostgreSQL** `daily_items` + `daily_state` — tek kaynak içerik
+2. **`POST /api/admin/daily-send`** — sıradaki içerik + kayıtlı APNs jetonlarına bildirim
+3. **Flutter** — mesajı işler, `home_widget` + yerel cache günceller
+4. **Widget** — paylaşılan veriyi okur
 
-## 📝 Notlar
+## Sorun giderme
 
-- Widget güncellemeleri iOS ve Android tarafından garanti edilmez
-- Bu yüzden görünür bildirimler zorunludur
-- Widget güncellemesi best-effort olarak çalışır
-- Bildirime dokununca uygulama açılır ve widget kesin güncellenir
+- **Widget güncellenmiyor:** iOS App Group, ana uygulama + extension aynı grup; widget’ı kaldırıp yeniden ekleyin.
+- **Bildirim (iOS):** APNs .p8, `APNS_TOPIC` = bundle id, cihazda bildirim izni; sunucuda `apns_device_tokens` dolu mu kontrol edin.
+- **İçerik boş:** `GET /api/daily-items` ve `motivations.json` / import script’leri (`backendGo`).
 
-## 🐛 Sorun Giderme
+## Lisans
 
-### Widget Güncellenmiyor
-
-1. App Group ID'lerin eşleştiğinden emin olun (iOS)
-2. SharedPreferences key'lerinin doğru olduğunu kontrol edin (Android)
-3. Widget'ı yeniden ekleyin
-
-### Bildirimler Gelmiyor
-
-1. FCM token'ın alındığını kontrol edin
-2. Topic'e subscribe olunduğunu kontrol edin
-3. APNs sertifikasının yüklendiğini kontrol edin (iOS)
-
-### Cloud Function Çalışmıyor
-
-1. Firebase Console > Functions > Logs
-2. Firestore index'lerinin oluşturulduğunu kontrol edin
-3. Cron ifadesinin doğru olduğunu kontrol edin
-
-## 📄 Lisans
-
-Bu proje özel bir projedir.
-
-## 👥 Katkıda Bulunanlar
-
-- Geliştirici: [Sizin Adınız]
-
----
-
-**Not**: Bu proje production'a geçmeden önce güvenlik ayarlarını (Firestore rules, authentication) gözden geçirin.
+Özel proje.

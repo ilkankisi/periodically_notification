@@ -1,16 +1,23 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../models/motivation.dart';
+import '../widgets/motivation_cached_image.dart';
+import '../services/content_sync_service.dart';
 import '../services/motivation_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/search_history_service.dart';
 import '../widgets/header_bar.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../widgets/app_top_bar.dart';
+import '../services/notification_badge_controller.dart';
+import 'notifications_page.dart';
+import 'zincir_page.dart';
 import 'content_detail_page.dart';
 import 'all_content_list_page.dart';
+import 'add_my_motivation_page.dart';
+import '../utils/responsive.dart';
 
 /// Keşfet sayfası: arama, kategoriler, Trend İçerikler (2x2 grid), Senin İçin Seçtiklerimiz.
 /// Header başlık ortada, profil ve bildirim yok. Anasayfadaki card yapısı kullanılır.
@@ -50,18 +57,28 @@ class _ExplorePageState extends State<ExplorePage> {
     super.dispose();
   }
 
-  /// Aramaya göre filtre: hem title hem body'de (büyük/küçük harf duyarsız) aranır.
+  /// Aramaya ve kategoriye göre filtre
   List<Motivation> get _filteredItems {
-    if (_searchQuery.isEmpty) return _items;
+    const cats = ['Tümü', 'Teknoloji', 'Sanat', 'Tarih', 'Bilim'];
+    final selectedCat = _selectedCategoryIndex < cats.length ? cats[_selectedCategoryIndex] : 'Tümü';
+
+    var result = _items;
+    // Kategori filtresi (Tümü = 0 ise filtreleme yok)
+    if (selectedCat != 'Tümü') {
+      result = result.where((m) => (m.category ?? '') == selectedCat).toList();
+    }
+    // Arama filtresi
+    if (_searchQuery.isEmpty) return result;
     final q = _searchQuery.toLowerCase();
-    return _items.where((m) {
+    return result.where((m) {
       final titleMatch = m.title.toLowerCase().contains(q);
-      final bodyMatch = (m.body).toLowerCase().contains(q);
+      final bodyMatch = m.body.toLowerCase().contains(q);
       return titleMatch || bodyMatch;
     }).toList();
   }
 
   Future<void> _load() async {
+    await ContentSyncService.syncFromBackend();
     final all = await MotivationService.loadAll();
     final entries = await SavedItemsService.getSavedEntries();
     final savedIds = entries.map((e) => e.itemId).toSet();
@@ -93,18 +110,30 @@ class _ExplorePageState extends State<ExplorePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
+      appBar: AppTopBar(
+        title: 'Keşfet',
+        onNotificationsTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const NotificationsPage()),
+          );
+          await NotificationBadgeController.instance.refresh();
+        },
+        onChainTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ZincirPage()),
+          );
+        },
+      ),
       body: Column(
         children: [
-          HeaderBar(
-            title: 'Keşfet',
-            leading: const SizedBox.shrink(),
-            trailing: const SizedBox.shrink(),
-          ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _load,
               color: Colors.white,
               child: SingleChildScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -117,7 +146,9 @@ class _ExplorePageState extends State<ExplorePage> {
                         const SizedBox(height: 12),
                         _buildSearchHistorySection(),
                       ],
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 16),
+                      _buildCategoryChips(),
+                      const SizedBox(height: 16),
                       _buildTrendSection(),
                       if (_searchHistory.isNotEmpty) ...[
                         const SizedBox(height: 8),
@@ -335,13 +366,13 @@ class _ExplorePageState extends State<ExplorePage> {
         trendItems.isEmpty
             ? _buildEmptySection(
                 _searchQuery.isEmpty
-                    ? 'Henüz trend içerik yok. Firebase\'den veriler yüklenecek.'
+                    ? 'Henüz trend içerik yok. Sunucudan yeni içerikler eklendiğinde burada görünür.'
                     : 'Aramanızla eşleşen içerik bulunamadı.',
               )
             : GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
+                crossAxisCount: Responsive.exploreGridColumns(context),
                 mainAxisSpacing: 16,
                 crossAxisSpacing: 16,
                 childAspectRatio: 3 / 4,
@@ -368,9 +399,9 @@ class _ExplorePageState extends State<ExplorePage> {
     );
   }
 
-  /// Anasayfadaki card yapısına uygun: border, rounded, image + gradient + title + bookmark. Sadece Firebase/cache verisi.
+  /// Anasayfadaki card yapısına uygun: border, rounded, image + gradient + title + bookmark.
   Widget _buildTrendCard(Motivation item) {
-    final imageUrl = item.imageUrl ?? '';
+    final imageUrl = item.displayImageUrl ?? '';
     return GestureDetector(
       onTap: () => Navigator.push(
             context,
@@ -396,11 +427,11 @@ class _ExplorePageState extends State<ExplorePage> {
                   fit: BoxFit.cover,
                 )
               else if (imageUrl.isNotEmpty)
-                CachedNetworkImage(
+                MotivationCachedImage(
                   imageUrl: imageUrl,
                   fit: BoxFit.cover,
                   placeholder: (_, __) => Container(color: const Color(0xFF27272A)),
-                  errorWidget: (_, __, ___) => Container(color: const Color(0xFF27272A)),
+                  error: (_, __, ___) => Container(color: const Color(0xFF27272A)),
                 )
               else
                 Container(color: const Color(0xFF27272A)),
@@ -510,15 +541,15 @@ class _ExplorePageState extends State<ExplorePage> {
         if (picks.isEmpty)
           _buildEmptySection(
             _searchQuery.isEmpty
-                ? 'Henüz seçilmiş içerik yok. Firebase\'den veriler yüklenecek.'
+                ? 'Henüz seçilmiş içerik yok. Sunucudan yeni içerikler eklendiğinde burada görünür.'
                 : 'Aramanızla eşleşen içerik bulunamadı.',
           )
         else
           ...picks.map((m) => _buildPickRow(
-                category: 'İÇERİK',
+                category: (m.category ?? 'İÇERİK').toUpperCase(),
                 title: m.title,
                 readTime: _readTimeFromBody(m.body),
-                imageUrl: m.imageUrl,
+                imageUrl: m.displayImageUrl,
                 imageBase64: m.imageBase64,
                 onTap: () => Navigator.push(
                   context,
@@ -567,11 +598,11 @@ class _ExplorePageState extends State<ExplorePage> {
                   child: imageBase64 != null
                       ? Image.memory(base64Decode(imageBase64), fit: BoxFit.cover)
                       : (imageUrl != null && imageUrl.isNotEmpty
-                            ? CachedNetworkImage(
+                            ? MotivationCachedImage(
                                 imageUrl: imageUrl,
                                 fit: BoxFit.cover,
                                 placeholder: (_, __) => Container(color: const Color(0xFF27272A)),
-                                errorWidget: (_, __, ___) => Container(color: const Color(0xFF27272A)),
+                                error: (_, __, ___) => Container(color: const Color(0xFF27272A)),
                               )
                             : Container(color: const Color(0xFF27272A))),
                 ),

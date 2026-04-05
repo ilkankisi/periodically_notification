@@ -4,4 +4,6 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- USB ile gerçek cihaz: http://<Mac-LAN-IP>:8080 → backendGo (release’de kaldırılabilir) -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

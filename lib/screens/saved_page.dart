@@ -1,13 +1,17 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../models/motivation.dart';
+import '../widgets/motivation_cached_image.dart';
 import '../services/motivation_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/header_bar.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../widgets/app_top_bar.dart';
+import '../services/notification_badge_controller.dart';
+import 'notifications_page.dart';
+import 'zincir_page.dart';
 import 'content_detail_page.dart';
 
 /// Kaydedilenler sayfası - HTML tasarımı: header, filtre chip'leri, liste (thumbnail, başlık, kayıt tarihi, sil)
@@ -27,7 +31,7 @@ class SavedPage extends StatefulWidget {
 
 class _SavedPageState extends State<SavedPage> {
   int _filterIndex = 0;
-  static const _filters = ['Tümü', 'Makaleler', 'Videolar', 'Sesler'];
+  static const _filters = ['Tümü', 'Makaleler'];
 
   List<SavedEntry> _entries = [];
   Map<String, Motivation> _itemsById = {};
@@ -55,34 +59,24 @@ class _SavedPageState extends State<SavedPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
+      appBar: AppTopBar(
+        title: 'Kaydedilenler',
+        onNotificationsTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationsPage()),
+          );
+          await NotificationBadgeController.instance.refresh();
+        },
+        onChainTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ZincirPage()),
+          );
+        },
+      ),
       body: Column(
         children: [
-          HeaderBar(
-            title: 'Kaydedilenler',
-            leading: SizedBox(
-              width: 40,
-              height: 40,
-              child: IconButton(
-                onPressed: () {
-                  widget.onTabTap?.call(0);
-                },
-                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-                padding: EdgeInsets.zero,
-                style: IconButton.styleFrom(minimumSize: const Size(24, 24)),
-              ),
-            ),
-            trailing: SizedBox(
-              width: 40,
-              height: 40,
-              child: IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.more_vert, color: Colors.white, size: 24),
-                padding: EdgeInsets.zero,
-                style: IconButton.styleFrom(minimumSize: const Size(24, 24)),
-              ),
-            ),
-          ),
-         
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF2094F3)))
@@ -152,12 +146,12 @@ class _SavedPageState extends State<SavedPage> {
                         base64Decode(item.imageBase64!),
                         fit: BoxFit.cover,
                       )
-                    : (item.imageUrl != null && item.imageUrl!.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: item.imageUrl!,
+                    : (item.displayImageUrl != null && item.displayImageUrl!.isNotEmpty
+                          ? MotivationCachedImage(
+                              imageUrl: item.displayImageUrl!,
                               fit: BoxFit.cover,
                               placeholder: (_, __) => Container(color: const Color(0xFF27272A)),
-                              errorWidget: (_, __, ___) => Container(color: const Color(0xFF27272A)),
+                              error: (_, __, ___) => Container(color: const Color(0xFF27272A)),
                             )
                           : Container(
                               color: const Color(0xFF27272A),

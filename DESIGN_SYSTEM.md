@@ -235,26 +235,15 @@ ElevatedButton(
 - **Text Color:** White
 - **Background:** Blue
 
-#### Test Notification Button
+#### Test notification (manuel tetik)
 
-```dart
-ElevatedButton.icon(
-  onPressed: _sendTestNotification,
-  icon: const Icon(Icons.send),
-  label: const Text('Test Notification Gönder'),
-  style: ElevatedButton.styleFrom(
-    backgroundColor: Colors.orange,
-  ),
-)
+Günlük FCM artık Go backend: `POST /api/admin/daily-send` ve header `X-Admin-Secret` (`ADMIN_SECRET`). Örnek:
+
+```bash
+curl -sS -X POST "$API_BASE_URL/api/admin/daily-send" -H "X-Admin-Secret: $ADMIN_SECRET"
 ```
 
-- **Style:** ElevatedButton.icon
-- **Icon:** `Icons.send` (send/arrow icon)
-- **Background:** Orange (`Colors.orange`)
-- **Text Color:** White (default from orange theme)
-- **Icon Position:** Left (default)
-- **Button Width:** Wrap content
-- **Button Height:** 48 dp
+Uygulama içi test butonu yoksa bu istek veya cron kullanılır. Eski `manualSendDailyContent` Cloud Function yerine bu uç kullanılır.
 
 ---
 

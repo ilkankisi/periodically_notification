@@ -1,14 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/motivation.dart';
 
-/// Yerel önbellek: Firebase'den gelen motivasyon verilerini yazılabilir dosyada tutar.
-/// assets/data/motivation.json read-only - runtime'da {documents}/data/motivation.json'a yazılır.
+/// Yerel önbellek: ağ / bildirimden gelen motivasyon verilerini yazılabilir dosyada tutar.
+/// assets/data/motivations.json read-only - runtime'da {documents}/data/motivations.json'a yazılır.
 /// Anasayfa bu runtime dosyasından okur (assets ile aynı yapı).
 class MotivationCacheService {
-  static const String _cacheFileName = 'data/motivation.json';
+  static const String _cacheFileName = 'data/motivations.json';
 
   /// Dışarıdan sıralama için (loadAll asset path vb.)
   static List<Motivation> sortByLatestFirst(List<Motivation> list) {
@@ -49,7 +48,7 @@ class MotivationCacheService {
   }
 
   /// Yerel önbellekten tüm motivasyonları yükler.
-  /// Önce {documents}/data/motivation.json, yoksa motivation_cache.json (fallback).
+  /// Önce {documents}/data/motivations.json, yoksa motivation_cache.json (fallback).
   static Future<List<Motivation>> loadFromCache() async {
     for (final path in [
       await _getCachePath(),
@@ -70,10 +69,10 @@ class MotivationCacheService {
     return [];
   }
 
-  /// Firestore'dan gelen veriyi önbelleğe ekler veya günceller.
+  /// API veya push bildiriminden gelen motivasyonu yerel önbelleğe yazar.
   /// Aynı id varsa günceller, yoksa listeye ekler.
-  static Future<void> upsertFromFirestore(
-    String docId,
+  static Future<void> upsertMotivation(
+    String itemId,
     Map<String, dynamic> itemData,
   ) async {
     try {
@@ -83,25 +82,24 @@ class MotivationCacheService {
       if (sentAt != null) {
         if (sentAt is DateTime) {
           sentAtStr = sentAt.toIso8601String();
-        } else if (sentAt is Timestamp) {
-          sentAtStr = sentAt.toDate().toIso8601String();
         } else {
           sentAtStr = sentAt.toString();
         }
       }
 
       final newItem = Motivation.fromMap({
-        'id': docId,
-        'docId': docId,
+        'id': itemId,
+        'docId': itemId,
         'title': itemData['title'] ?? '',
         'body': itemData['body'] ?? '',
         'sentAt': sentAtStr,
         'order': itemData['order'],
         'image': itemData['image'],
         'imageUrl': itemData['imageUrl'],
+        'category': itemData['category'],
       });
 
-      final index = items.indexWhere((m) => m.id == docId);
+      final index = items.indexWhere((m) => m.id == itemId);
       List<Motivation> updated;
       if (index >= 0) {
         updated = [...items]..[index] = newItem;
@@ -143,7 +141,7 @@ class MotivationCacheService {
     return merged;
   }
 
-  /// Bildirimle (FCM) kullanıcıya ulaşan içerik id'leri. Anasayfada sadece bunlar gösterilir.
+  /// Push ile kullanıcıya ulaşan içerik id'leri. Anasayfada sadece bunlar gösterilir.
   static Future<String> _getDeliveredIdsPath() async {
     final dir = await getApplicationDocumentsDirectory();
     return '${dir.path}/$_deliveredIdsFileName';
@@ -156,7 +154,7 @@ class MotivationCacheService {
     }
   }
 
-  /// FCM ile bildirim geldiğinde bu id kaydedilir. Anasayfa sadece bu id'lerdeki içerikleri listeler.
+  /// Push bildirimi geldiğinde bu id kaydedilir; anasayfa bu id'lerdeki içerikleri listeler.
   static Future<void> addDeliveredItemId(String itemId) async {
     if (itemId.isEmpty) return;
     try {
@@ -169,7 +167,7 @@ class MotivationCacheService {
     } catch (_) {}
   }
 
-  /// Birden fazla id'yi tek seferde delivered olarak işaretler (Firestore sync için).
+  /// Birden fazla id'yi tek seferde delivered olarak işaretler.
   static Future<void> addDeliveredItemIds(Iterable<String> itemIds) async {
     final valid = itemIds.where((id) => id.isNotEmpty).toSet();
     if (valid.isEmpty) return;

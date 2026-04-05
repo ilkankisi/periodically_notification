@@ -1,46 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_functions/cloud_functions.dart';
-import 'services/firebase_service.dart';
+import 'services/auth_service.dart';
+import 'services/backend_service.dart';
+import 'services/onboarding_service.dart';
+import 'services/push_notification_service.dart';
 import 'package:home_widget/home_widget.dart';
 import 'screens/home_page.dart';
 import 'screens/explore_page.dart';
 import 'screens/saved_page.dart';
 import 'screens/profile_page.dart';
+import 'screens/value_proposition_onboarding.dart';
 import 'widgets/bottom_nav_bar.dart';
 
 void appLog(String message) {
   print('[APP-DART] $message');
 }
 
-Future<void> _initializeFirebaseWithRetry({int maxAttempts = 3}) async {
-  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      appLog('Firebase initialize deneme $attempt/$maxAttempts...');
-      await Firebase.initializeApp();
-      appLog('Firebase initialize tamamlandı');
-      return;
-    } on Exception catch (e) {
-      final isChannelError = e.toString().contains('channel-error') ||
-          e.toString().contains('FirebaseCoreHostApi');
-      if (isChannelError && attempt < maxAttempts) {
-        appLog('Kanal henüz hazır değil, ${200 * attempt}ms sonra tekrar denenecek...');
-        await Future<void>.delayed(Duration(milliseconds: 200 * attempt));
-      } else {
-        rethrow;
-      }
-    }
-  }
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   appLog('main() başladı');
   try {
-    await _initializeFirebaseWithRetry();
+    await BackendService.loadStoredToken();
+    await AuthService.loadCachedSession();
+    appLog('BackendService + AuthService oturum yüklendi');
 
-    await FirebaseService.initialize();
-    appLog('FirebaseService setup tamamlandı');
+    await PushNotificationService.initialize();
+    appLog('PushNotificationService setup tamamlandı');
 
     runApp(const MyApp());
     appLog('runApp() tamamlandı');
@@ -99,23 +83,6 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  Future<void> _sendTestNotification() async {
-    appLog('Test notification gönderiliyor...');
-    try {
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('manualSendDailyContent')
-          .call();
-      
-      appLog('✅ Test notification gönderildi: ${result.data}');
-      
-      // Veriyi yenile
-      await Future.delayed(const Duration(seconds: 1));
-      _loadWidgetData();
-    } catch (e) {
-      appLog('❌ Test notification hatası: $e');
-    }
-  }
-
   @override
   void didChangeDependencies() {
     appLog('_MyAppState.didChangeDependencies() çağrıldı');
@@ -130,7 +97,14 @@ class _MyAppState extends State<MyApp> {
       return MaterialApp(
         title: 'DAHA',
         debugShowCheckedModeBanner: false,
-        home: const _MainShell(),
+        home: const _AppRoot(),
+        builder: (context, child) {
+          return GestureDetector(
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            behavior: HitTestBehavior.translucent,
+            child: child,
+          );
+        },
       );
     } catch (e, st) {
       appLog('ERROR _MyAppState.build: $e');
@@ -150,7 +124,53 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-/// Ana Sayfa / Keşfet sekmeleri ve ortak alt navigasyon.
+/// İlk açılış değer önerisi veya ana kabuk.
+class _AppRoot extends StatefulWidget {
+  const _AppRoot();
+
+  @override
+  State<_AppRoot> createState() => _AppRootState();
+}
+
+class _AppRootState extends State<_AppRoot> {
+  bool _ready = false;
+  bool _showOnboarding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final done = await OnboardingService.isCompleted();
+    if (!mounted) return;
+    setState(() {
+      _showOnboarding = !done;
+      _ready = true;
+    });
+  }
+
+  void _onboardingFinished() => setState(() => _showOnboarding = false);
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_ready) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF121212),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF2094F3)),
+        ),
+      );
+    }
+    if (_showOnboarding) {
+      return ValuePropositionOnboarding(onFinished: _onboardingFinished);
+    }
+    return const _MainShell();
+  }
+}
+
+/// Ana Sayfa / Keşfet sekmeleri - iPad'de yan menü, telefonda alt navigasyon
 class _MainShell extends StatefulWidget {
   const _MainShell();
 
@@ -161,23 +181,55 @@ class _MainShell extends StatefulWidget {
 class _MainShellState extends State<_MainShell> {
   int _currentIndex = 0;
 
+  static const _destinations = [
+    (icon: Icons.home_outlined, label: 'Anasayfa'),
+    (icon: Icons.explore_outlined, label: 'Keşfet'),
+    (icon: Icons.bookmark_outline, label: 'Kaydedilenler'),
+    (icon: Icons.person_outline, label: 'Profil'),
+  ];
+
   @override
   Widget build(BuildContext context) {
+    final isTablet = MediaQuery.sizeOf(context).width >= 600;
+    final navBar = BottomNavBar(activeIndex: _currentIndex, onTabTap: _onTabTap);
+    final body = IndexedStack(
+      index: _currentIndex,
+      children: [
+        HomePage(showBottomBar: false, onTabTap: _onTabTap),
+        ExplorePage(showBottomBar: false, onTabTap: _onTabTap),
+        SavedPage(showBottomBar: false, onTabTap: _onTabTap),
+        ProfilePage(showBottomBar: false, onTabTap: _onTabTap),
+      ],
+    );
+
+    if (isTablet) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF121212),
+        body: Row(
+          children: [
+            NavigationRail(
+              backgroundColor: const Color(0xFF1F1F1F),
+              selectedIndex: _currentIndex,
+              onDestinationSelected: _onTabTap,
+              labelType: NavigationRailLabelType.all,
+              destinations: _destinations
+                  .map((d) => NavigationRailDestination(
+                        icon: Icon(d.icon, color: const Color(0xFF9CA3AF)),
+                        selectedIcon: Icon(d.icon, color: const Color(0xFF2094F3)),
+                        label: Text(d.label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                      ))
+                  .toList(),
+            ),
+            Expanded(child: body),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          HomePage(showBottomBar: false, onTabTap: _onTabTap),
-          ExplorePage(showBottomBar: false, onTabTap: _onTabTap),
-          SavedPage(showBottomBar: false, onTabTap: _onTabTap),
-          ProfilePage(showBottomBar: false, onTabTap: _onTabTap),
-        ],
-      ),
-      bottomNavigationBar: BottomNavBar(
-        activeIndex: _currentIndex,
-        onTabTap: _onTabTap,
-      ),
+      body: body,
+      bottomNavigationBar: navBar,
     );
   }
 

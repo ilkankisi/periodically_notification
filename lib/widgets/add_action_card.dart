@@ -1,0 +1,241 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import '../screens/login_page.dart';
+import '../services/auth_service.dart';
+import '../services/backend_service.dart';
+import '../services/gamification_service.dart';
+import '../services/local_notification_service.dart';
+
+/// "Bugün bu sözle ne yaptın?" kartı + opt-in sync.
+class AddActionCard extends StatefulWidget {
+  final String quoteId;
+  final String quoteTitle;
+  /// Aksiyon sunucuya kaydedildikten sonra (tebrik diyaloğu kapatıldıktan sonra).
+  final VoidCallback? onActionSaved;
+
+  const AddActionCard({
+    super.key,
+    required this.quoteId,
+    required this.quoteTitle,
+    this.onActionSaved,
+  });
+
+  @override
+  State<AddActionCard> createState() => _AddActionCardState();
+}
+
+class _AddActionCardState extends State<AddActionCard> {
+  final TextEditingController _controller = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onAddAction() async {
+    final note = _controller.text.trim();
+    if (note.isEmpty) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    if (!AuthService.isLoggedIn) {
+      final ok = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LoginPage(
+            onSuccess: () => Navigator.pop(context, true),
+          ),
+        ),
+      );
+      if (ok == true && mounted) _showOptInAndSend(note);
+      return;
+    }
+
+    await _showOptInAndSend(note);
+  }
+
+  Future<void> _showOptInAndSend(String note) async {
+    final sync = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F1F),
+        title: const Text(
+          'Senkronizasyon',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Aksiyonlarınız sunucuya senkron edilsin mi?',
+          style: TextStyle(color: Color(0xFFB0B0B0)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hayır', style: TextStyle(color: Color(0xFF9CA3AF))),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2094F3)),
+            child: const Text('Evet', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (sync != true || !mounted) return;
+
+    setState(() => _sending = true);
+    try {
+      final ok = await BackendService.ensureToken();
+      if (!ok || !mounted) {
+        _showSnack('Giriş gerekli. Lütfen tekrar giriş yapın.');
+        return;
+      }
+
+      final localDate = _formatLocalDate(DateTime.now());
+      final idempotencyKey = '${widget.quoteId}_${localDate}_${DateTime.now().millisecondsSinceEpoch}';
+
+      final result = await BackendService.client.postAction(
+        quoteId: widget.quoteId,
+        localDate: localDate,
+        note: note,
+        idempotencyKey: idempotencyKey,
+      );
+
+      if (!mounted) return;
+      if (result != null) {
+        _controller.clear();
+        await LocalNotificationService.scheduleTomorrowReflectionReminder(
+          widget.quoteTitle,
+        );
+        await GamificationService.syncFromBackend();
+        await _showCongratulationsDialog();
+        widget.onActionSaved?.call();
+      } else {
+        _showSnack('Kaydedilemedi. Tekrar deneyin.');
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  String _formatLocalDate(DateTime d) {
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _showCongratulationsDialog() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F1F),
+        title: Text(
+          'Harika!',
+          style: GoogleFonts.notoSans(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 20,
+          ),
+        ),
+        content: Text(
+          'Tebrikler! Hayatınıza bugün bir şey katabildik; ne mutlu bize.',
+          style: GoogleFonts.notoSans(
+            color: const Color(0xFFB0B0B0),
+            fontSize: 16,
+            height: 1.45,
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2094F3)),
+            child: const Text('Tamam', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: const Color(0xFF374151),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1F2937),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF374151)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Bugün bu sözle ne yaptın?',
+            style: GoogleFonts.notoSans(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            style: GoogleFonts.notoSans(fontSize: 14, color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Örn: Sabah erken kalktım, kitap okudum...',
+              hintStyle: GoogleFonts.notoSans(fontSize: 14, color: const Color(0xFF6B7280)),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF374151)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF374151)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF2094F3)),
+              ),
+            ),
+            maxLines: 3,
+            minLines: 1,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _sending ? null : _onAddAction,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF2094F3),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: _sending
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Aksiyon Ekle', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

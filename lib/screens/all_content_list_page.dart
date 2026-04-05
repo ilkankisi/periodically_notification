@@ -1,14 +1,15 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../models/motivation.dart';
+import '../widgets/motivation_cached_image.dart';
+import '../services/content_sync_service.dart';
 import '../services/motivation_service.dart';
 import '../widgets/header_bar.dart';
 import 'content_detail_page.dart';
 
-/// Keşfet > Hepsini Gör: Firebase'deki tüm içerikler, sayfa başı 5 öğe, pagination.
+/// Keşfet > Hepsini Gör: cache + Go API ile birleşik liste, sayfa başı 5 öğe, pagination.
 class AllContentListPage extends StatefulWidget {
   const AllContentListPage({super.key});
 
@@ -30,6 +31,7 @@ class _AllContentListPageState extends State<AllContentListPage> {
   }
 
   Future<void> _load() async {
+    await ContentSyncService.syncFromBackend();
     final all = await MotivationService.loadAll();
     setState(() {
       _items = all;
@@ -135,12 +137,12 @@ class _AllContentListPageState extends State<AllContentListPage> {
                         base64Decode(item.imageBase64!),
                         fit: BoxFit.cover,
                       )
-                    : (item.imageUrl != null && item.imageUrl!.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: item.imageUrl!,
+                    : (item.displayImageUrl != null && item.displayImageUrl!.isNotEmpty
+                          ? MotivationCachedImage(
+                              imageUrl: item.displayImageUrl!,
                               fit: BoxFit.cover,
                               placeholder: (_, __) => Container(color: const Color(0xFF27272A)),
-                              errorWidget: (_, __, ___) => Container(color: const Color(0xFF27272A)),
+                              error: (_, __, ___) => Container(color: const Color(0xFF27272A)),
                             )
                           : Container(
                               color: const Color(0xFF27272A),

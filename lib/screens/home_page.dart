@@ -1,15 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
-
+import '../services/notification_badge_controller.dart';
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../models/motivation.dart';
-import '../services/firebase_service.dart';
+import '../widgets/motivation_cached_image.dart';
+import '../services/content_sync_service.dart';
+import '../services/push_notification_service.dart';
 import '../services/motivation_service.dart';
 import '../widgets/header_bar.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../widgets/app_top_bar.dart';
 import 'all_content_list_page.dart';
 import 'content_detail_page.dart';
+import 'notifications_page.dart';
+import 'zincir_page.dart';
+import '../widgets/add_action_card.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -29,15 +34,27 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<Motivation> items = [];
   bool loading = true;
+  bool _hasDeliveredContent = true; // Bildirimle gelen içerik var mı?
 
   StreamSubscription<void>? _contentUpdateSub;
+
+  Widget _homeImagePlaceholder(double height) {
+    return Container(
+      height: height,
+      width: double.infinity,
+      color: const Color(0xFF27272A),
+      child: const Center(
+        child: Icon(Icons.image_not_supported_outlined, color: Color(0xFF52525B), size: 40),
+      ),
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _load();
-    _contentUpdateSub = FirebaseService.onContentUpdated.stream.listen((_) {
+    _contentUpdateSub = PushNotificationService.onContentUpdated.stream.listen((_) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     });
   }
@@ -57,15 +74,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _load() async {
-    // Anasayfada sadece bildirimle (FCM) gelen içerikler
-    final all = await MotivationService.loadDeliveredOnly();
-    setState(() {
-      items = all;
-      loading = false;
-    });
+    await ContentSyncService.syncFromBackend();
+    // Anasayfada önce bildirimle (FCM) gelen içerikler
+    final delivered = await MotivationService.loadDeliveredOnly();
+    if (delivered.isNotEmpty) {
+      setState(() {
+        items = delivered;
+        _hasDeliveredContent = true;
+        loading = false;
+      });
+    } else {
+      // Bildirim gelmemişse: Keşfet'ten ilk 5 içeriği "Bugünün Önerisi" olarak göster
+      final all = await MotivationService.loadAll();
+      setState(() {
+        items = all.take(5).toList();
+        _hasDeliveredContent = false;
+        loading = false;
+      });
+    }
     // Widget'ı güncelle - FCM arka planda geldiyse resim burada indirilir
-    FirebaseService.refreshWidgetFromCache();
+    PushNotificationService.refreshWidgetFromCache();
   }
+
+  /// Bildirimle gelen içerik mi yoksa öneri mi? (öneri = delivered boşken gösterilen)
+  bool get _isSuggestedContent => items.isNotEmpty && !_hasDeliveredContent;
 
   @override
   Widget build(BuildContext context) {
@@ -74,9 +106,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
+      appBar: AppTopBar(
+        title: 'Günün İçeriği',
+        onNotificationsTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const NotificationsPage()),
+          );
+          await NotificationBadgeController.instance.refresh();
+        },
+        onChainTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ZincirPage()),
+          );
+        },
+      ),
       body: Column(
         children: [
-          const HeaderBar(),
+          const SizedBox(height: 0),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _load,
@@ -88,13 +136,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      items.isEmpty ? _buildWelcomeCard() : _buildMainCard(latest!),
+                      items.isEmpty
+                          ? _buildWelcomeCard()
+                          : _buildMainCard(latest!, isSuggested: _isSuggestedContent),
+                      if (items.isNotEmpty) ...[
+                        const SizedBox(height: 28),
+                        _buildHabitSection(items.first),
+                      ],
                       if (hasPreviousDays) ...[
                         const SizedBox(height: 24),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Önceki Günler', style: TextStyle(color: Color(0xFFF3F4F6), fontSize: 18, fontWeight: FontWeight.w700)),
+                            Text(
+                              _isSuggestedContent ? 'Daha Fazla İçerik' : 'Önceki Günler',
+                              style: const TextStyle(color: Color(0xFFF3F4F6), fontSize: 18, fontWeight: FontWeight.w700),
+                            ),
                             TextButton(
                               onPressed: () => Navigator.push(
                                 context,
@@ -162,8 +219,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 16),
             Text(
-              'Motive olmaya hazır mısınız? Yarın itibariyle motive olmaya başlayabilirsiniz. '
-              'Bugün kendinizi motive etmek isterseniz Keşfet sayfamızı inceleyip bugünlük kendinizi motive edebilirsiniz.',
+              'DAHA ile motivasyonu günlük eyleme çevirirsin: bugün bir içerikle tetiklenir, '
+              'detayda veya burada "Bugün bu sözle ne yaptın?" alanına yazdığın adımların zincirini ve rozetlerini oluşturur. '
+              'Şimdilik Keşfet’ten içerik seçebilir veya yarın düzenli bildirimini bekleyebilirsin.',
               style: const TextStyle(color: Color(0xFFE5E7EB), fontSize: 16, height: 1.4),
             ),
             const SizedBox(height: 24),
@@ -182,8 +240,68 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  /// Bugünün içeriği kartı (en az 1 bildirim gelmiş)
-  Widget _buildMainCard(Motivation latest) {
+  /// Ana değer önerisi: günlük eylem kaydı (App Store 4.2).
+  Widget _buildHabitSection(Motivation latest) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.task_alt, color: Color(0xFF2094F3), size: 22),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Bugünkü alışkanlığın',
+                style: TextStyle(
+                  color: Color(0xFFF3F4F6),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Motivasyon tek başına yetmez — ne yaptığını yaz, zincirini koru. Bu alan uygulamanın asıl günlük takip akışıdır.',
+          style: TextStyle(
+            color: Color(0xFF9CA3AF),
+            fontSize: 14,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 16),
+        AddActionCard(
+          quoteId: latest.id,
+          quoteTitle: latest.title,
+          onActionSaved: _load,
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(builder: (context) => const ZincirPage()),
+            );
+          },
+          icon: const Icon(Icons.link, color: Color(0xFF42A5F5), size: 20),
+          label: const Text(
+            'Zincir ve rozetlerini gör',
+            style: TextStyle(color: Color(0xFF42A5F5), fontSize: 15, fontWeight: FontWeight.w600),
+          ),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF42A5F5),
+            side: const BorderSide(color: Color(0xFF42A5F5)),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Bugünün içeriği kartı (en az 1 bildirim gelmiş) veya öneri
+  Widget _buildMainCard(Motivation latest, {bool isSuggested = false}) {
+    final badge = isSuggested ? 'Bugünün Önerisi' : 'Bugünün Öne Çıkanı';
     return GestureDetector(
       onTap: () => Navigator.push(
             context,
@@ -213,23 +331,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(27)),
                     child: latest.imageBase64 != null
                         ? Image.memory(base64Decode(latest.imageBase64!), fit: BoxFit.fitHeight, width: double.infinity, height: 224)
-                        : (latest.imageUrl != null
-                            ? CachedNetworkImage(
-                                imageUrl: latest.imageUrl!,
+                        : (latest.displayImageUrl != null && latest.displayImageUrl!.isNotEmpty
+                            ? MotivationCachedImage(
+                                imageUrl: latest.displayImageUrl!,
                                 fit: BoxFit.fitHeight,
                                 width: double.infinity,
                                 height: 224,
                                 placeholder: (c, u) => Container(color: const Color(0xFF27272A)),
-                                errorWidget: (c, u, e) => Container(color: const Color(0xFF27272A)),
+                                error: (c, u, e) => _homeImagePlaceholder(224),
                               )
-                            : null),
+                            : _homeImagePlaceholder(224)),
                   ),
                 ),
-                const Positioned(
+                Positioned(
                   left: 16,
                   right: 16,
                   bottom: 16,
-                  child: Text('Bugünün Öne Çıkanı', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
+                  child: Text(badge, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
                 ),
               ],
             ),
@@ -287,9 +405,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               child: m.imageBase64 != null
                   ? Image.memory(base64Decode(m.imageBase64!), fit: BoxFit.fitHeight, width: double.infinity, height: 96)
-                  : (m.imageUrl != null
-                      ? CachedNetworkImage(imageUrl: m.imageUrl!, fit: BoxFit.fitHeight, width: double.infinity, height: 96, placeholder: (c, u) => Container(color: const Color(0xFF27272A)), errorWidget: (c, u, e) => Container(color: const Color(0xFF27272A)))
-                      : null),
+                  : (m.displayImageUrl != null && m.displayImageUrl!.isNotEmpty
+                      ? MotivationCachedImage(
+                          imageUrl: m.displayImageUrl!,
+                          fit: BoxFit.fitHeight,
+                          width: double.infinity,
+                          height: 96,
+                          placeholder: (c, u) => Container(color: const Color(0xFF27272A)),
+                          error: (c, u, e) => _homeImagePlaceholder(96),
+                        )
+                      : _homeImagePlaceholder(96)),
             ),
           ),
           Padding(

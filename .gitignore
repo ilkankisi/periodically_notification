@@ -53,3 +53,5 @@ firebase-debug.log
 # Functions
 functions/node_modules/
 functions/.runtimeconfig.json
+**/service-account.json
+*-firebase-adminsdk-*.json

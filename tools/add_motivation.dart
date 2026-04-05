@@ -11,7 +11,7 @@ Future<void> main(List<String> args) async {
   }
 
   final input = args[0];
-  final file = File('assets/data/motivation.json');
+  final file = File('assets/data/motivations.json');
 
   Map<String, dynamic> newObj;
   try {
@@ -55,5 +55,5 @@ Future<void> main(List<String> args) async {
 
   await file.create(recursive: true);
   await file.writeAsString(JsonEncoder.withIndent('  ').convert(list));
-  print('Yeni öğe eklendi ve assets/data/motivation.json güncellendi.');
+  print('Yeni öğe eklendi ve assets/data/motivations.json güncellendi.');
 }
