@@ -1,5 +1,7 @@
 # Yerel backend + iOS (hızlı)
 
+> Flutter uygulaması repoda **`mobile/`** altında; `flutter run` için önce `cd mobile`.
+
 ## 1. Docker
 
 ```bash

@@ -19,19 +19,23 @@ migrate_working_dir/
 .idea/
 
 # The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
+# VS Code which you may wish to include in version control, so this line is
+# commented out by default.
 #.vscode/
 
-# Flutter/Dart/Pub related
+# If Flutter is run from repo root by mistake
+/.dart_tool/
+/.flutter-plugins-dependencies
+
+# Flutter/Dart (app lives under mobile/)
 **/doc/api/
 **/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
+mobile/build/
 
 # Symbolication related
 app.*.symbols
@@ -40,9 +44,9 @@ app.*.symbols
 app.*.map.json
 
 # Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+mobile/android/app/debug
+mobile/android/app/profile
+mobile/android/app/release
 
 # Firebase
 **/google-services.json
@@ -51,7 +55,7 @@ firebase-debug.log
 .firebase/
 
 # Functions
-functions/node_modules/
-functions/.runtimeconfig.json
+mobile/functions/node_modules/
+mobile/functions/.runtimeconfig.json
 **/service-account.json
 *-firebase-adminsdk-*.json
