@@ -161,4 +161,4 @@ Telefonda uygulama açılıp topic’e subscribe olduktan sonra bildirim düşme
 
 ---
 
-**Kaynak kod:** Go backend yalnızca **`/Users/ilkankisi/Desktop/backendGo`** içindedir (modül `// periodically/backend`). FCM günlük gönderimi: `internal/dailysend/fcm.go` + `internal/dailysend/handler.go`, route: `POST /api/admin/daily-send`. Flutter repoda (`periodically_notification`) Go sunucusu tutulmaz.
+**Kaynak kod:** Go API bu monorepoda **`backend/`** altında (modül `periodically/backend`). FCM günlük gönderimi: `internal/dailysend/fcm.go` + `internal/dailysend/handler.go`, route: `POST /api/admin/daily-send`.

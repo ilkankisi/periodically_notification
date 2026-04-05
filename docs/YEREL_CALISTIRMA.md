@@ -1,12 +1,12 @@
 # Yerel backend + iOS (hızlı)
 
-> Flutter uygulaması repoda **`mobile/`** altında; `flutter run` için önce `cd mobile`.
+> Flutter **`mobile/`**, Go API **`backend/`** — komutları **git reporoot** (`periodically_notification`) dizininden çalıştırın.
 
 ## 1. Docker
 
 ```bash
 colima start
-cd /Users/ilkankisi/Desktop/backendGo
+cd backend
 docker-compose up -d
 ```
 
@@ -30,7 +30,7 @@ export ADMIN_SECRET=214a5258fed487583e4156f749060226fac982b35711c8f34ed09ad32069
 ## 3. Sunucu
 
 ```bash
-cd /Users/ilkankisi/Desktop/backendGo
+cd backend
 go run ./cmd/server
 ```
 
@@ -48,13 +48,13 @@ ifconfig | grep "inet " | grep -v 127.0.0.1
 Telefon aynı Wi‑Fi’de olmalı. Flutter:
 
 ```bash
-cd /Users/ilkankisi/Desktop/periodically_notification
+cd mobile
 flutter run --release --dart-define=API_BASE_URL=http://192.168.1.115:8080
 ```
 
 ## 5. Push tetik (token kaydı uygulamadan)
 
-§2’yi **aynı terminalde** `export` ettiysen `$ADMIN_SECRET` çalışır. Yeni terminal açtıysan ya tekrar `export ADMIN_SECRET=...` yap ya da header’a **sunucudakiyle aynı** değeri yaz:
+## 2’deki export’ları **aynı terminalde** `export` ettiysen `$ADMIN_SECRET` çalışır. Yeni terminal açtıysan ya tekrar `export ADMIN_SECRET=...` yap ya da header’a **sunucudakiyle aynı** değeri yaz:
 
 ```bash
 curl -sS -X POST "http://localhost:8080/api/admin/daily-send" \

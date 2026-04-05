@@ -2,7 +2,7 @@
 
 Günlük motivasyon içeriğini **Go + PostgreSQL** API’sinden ve (iOS’ta) **APNs** ile alan; ana ekran widget’ı olan Flutter uygulaması.
 
-Bu repoda **Firestore, Cloud Functions, `firebase.json` veya security rules dosyaları yok.** Veri ve zamanlanmış gönderim şu an **`~/Desktop/backendGo`** üzerindedir (ileride kökte `backend/` ile birleştirilebilir). Flutter kodu bu repoda **`mobile/`** klasöründedir.
+Bu repoda **Firestore, Cloud Functions, `firebase.json` veya security rules dosyaları yok.** API ve zamanlanmış gönderim **`backend/`** klasöründedir. Flutter kodu **`mobile/`** altındadır.
 
 ## Özellikler
 
@@ -14,19 +14,18 @@ Bu repoda **Firestore, Cloud Functions, `firebase.json` veya security rules dosy
 ## Gereksinimler
 
 - Flutter SDK 3.8.1+
-- **Backend:** `~/Desktop/backendGo` (monorepo için ileride kök `backend/`) — PostgreSQL, MinIO, ortam değişkenleri
+- **Backend:** [backend/README.md](../backend/README.md) — PostgreSQL, MinIO, ortam değişkenleri
 - iOS: Xcode, Push capability, APNs anahtarı (sunucu tarafında)
 - iOS 14+ / Android API 23+ (widget hedeflerine göre)
 
 ## Hızlı başlangıç
 
 ```bash
-# Backend’i çalıştırın (ayrı klasör)
-cd ~/Desktop/backendGo && go run ./cmd/server
+# Repo kökünden — Terminal 1
+cd backend && go run ./cmd/server
 
-# Uygulama — API adresi (repo kökünden)
-cd mobile
-flutter pub get
+# Repo kökünden — Terminal 2
+cd mobile && flutter pub get
 flutter run --dart-define=API_BASE_URL=http://SUNUCU:8080
 ```
 
@@ -37,7 +36,7 @@ curl -X POST "http://SUNUCU:8080/api/admin/daily-send" \
   -H "X-Admin-Secret: $ADMIN_SECRET"
 ```
 
-İçerik / JSON / MinIO betikleri: **`backendGo/README.md`** → *Veri ve görsel araçları (CLI)*.
+İçerik / JSON / MinIO betikleri: **[backend/README.md](../backend/README.md)** → *Veri ve görsel araçları (CLI)*.
 
 ### iOS widget
 

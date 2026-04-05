@@ -1,0 +1,59 @@
+# docker-compose.yml
+#
+# NEDEN DOCKER COMPOSE?
+# Tüm altyapıyı (PostgreSQL, RabbitMQ, MinIO) tek komutla ayağa kaldırırsın.
+# "docker compose up -d" = hepsi hazır. Başka makinede de aynı ortam.
+
+services:
+  # PostgreSQL - ana veritabanı
+  # NEDEN postgres?: Firestore yerine ilişkisel DB. daily_items, users tabloları.
+  postgres:
+    image: postgres:16-alpine
+    container_name: periodically-postgres
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: periodically
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d periodically"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ - mesaj kuyruğu
+  # NEDEN RabbitMQ?: Cron 2:40'ta "daily.send" kuyruğuna mesaj atar.
+  # Notification worker bu kuyruğu dinler, FCM gönderir. Async, decoupled.
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: periodically-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protokolü
+      - "15672:15672" # Web UI: http://localhost:15672 (guest/guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO - object storage (Firebase Storage yerine)
+  # NEDEN MinIO?: S3-uyumlu, ücretsiz, self-hosted. Görselleri burada tutarız.
+  minio:
+    image: minio/minio:latest
+    container_name: periodically-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - miniodata:/data
+    ports:
+      - "9000:9000"  # S3 API
+      - "9001:9001"  # Web Console: http://localhost:9001
+
+volumes:
+  pgdata:
+  miniodata:

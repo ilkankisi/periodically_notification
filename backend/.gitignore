@@ -1,0 +1,9 @@
+# Built binary (go build -o server)
+/server
+*.exe
+*.test
+*.out
+
+.env
+.DS_Store
+.idea/

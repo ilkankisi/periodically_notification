@@ -4,7 +4,7 @@
 			"path": "../../../"
 		},
 		{
-			"path": "../../../../backendGo"
+			"path": "../../../backend"
 		}
 	],
 	"settings": {}
