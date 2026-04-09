@@ -1,0 +1,9 @@
+.git
+*.md
+.env
+.env.*
+!.env.example
+scripts/
+**/upload-local-images.go
+**/import-motivations.go
+**/export-motivations.go

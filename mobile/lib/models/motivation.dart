@@ -9,6 +9,7 @@ class Motivation {
   final String? imageBase64; // base64 encoded image string
   final String? imageUrl; // storage URL
   final String? category; // Teknoloji, Sanat, Tarih, Bilim - Keşfet filtrelemesi için
+  final String? author; // İsteğe bağlı; API `author` / `authorName` vb.
 
   Motivation({
     required this.id,
@@ -19,9 +20,16 @@ class Motivation {
     this.imageBase64,
     this.imageUrl,
     this.category,
+    this.author,
   });
 
   static String? _trimUrl(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString().trim();
+    return s.isEmpty ? null : s;
+  }
+
+  static String? _trimAuthor(dynamic v) {
     if (v == null) return null;
     final s = v.toString().trim();
     return s.isEmpty ? null : s;
@@ -41,6 +49,7 @@ class Motivation {
                       : null),
             ),
         category: m['category']?.toString(),
+        author: _trimAuthor(m['author'] ?? m['authorName'] ?? m['writer']),
       );
 
   /// Go `GET /api/daily-items` satırı (camelCase JSON).
@@ -68,6 +77,7 @@ class Motivation {
       order: order,
       imageUrl: imageUrl,
       category: m['category']?.toString(),
+      author: _trimAuthor(m['author'] ?? m['authorName'] ?? m['writer']),
     );
   }
 
@@ -83,5 +93,6 @@ class Motivation {
         'image': imageBase64,
         'imageUrl': imageUrl,
         'category': category,
+        'author': author,
       };
 }

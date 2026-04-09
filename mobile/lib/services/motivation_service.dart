@@ -65,6 +65,7 @@ class MotivationService {
         imageBase64: m.imageBase64,
         imageUrl: url,
         category: m.category ?? a?.category,
+        author: m.author,
       );
     }).toList();
   }

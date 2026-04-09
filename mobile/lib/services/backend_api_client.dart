@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/motivation.dart';
@@ -16,18 +17,43 @@ class BackendApiClient {
 
   String get _apiBase => '$baseUrl${ApiConfig.apiPrefix}';
 
+  static const Duration _httpTimeout = Duration(seconds: 30);
+
   /// Herkese açık içerik listesi (JWT gerekmez).
   Future<List<Motivation>> fetchDailyItemsMotivations() async {
-    final r = await http.get(
-      Uri.parse('$_apiBase/daily-items'),
-      headers: _headers(withAuth: false),
-    );
-    if (r.statusCode != 200) return [];
-    final data = jsonDecode(r.body) as Map<String, dynamic>;
-    final list = data['items'] as List? ?? [];
-    return list
-        .map((e) => Motivation.fromApiDailyItem(Map<String, dynamic>.from(e as Map)))
-        .toList();
+    final uri = Uri.parse('$_apiBase/daily-items');
+    if (kDebugMode) {
+      debugPrint('[API] GET $uri');
+    }
+    try {
+      final r = await http
+          .get(uri, headers: _headers(withAuth: false))
+          .timeout(_httpTimeout);
+      if (kDebugMode) {
+        debugPrint('[API] daily-items → ${r.statusCode}, ${r.body.length} byte');
+      }
+      if (r.statusCode != 200) {
+        if (kDebugMode && r.body.isNotEmpty) {
+          debugPrint('[API] daily-items body: ${r.body.length > 200 ? '${r.body.substring(0, 200)}…' : r.body}');
+        }
+        return [];
+      }
+      final data = jsonDecode(r.body) as Map<String, dynamic>;
+      final list = data['items'] as List? ?? [];
+      final out = list
+          .map((e) => Motivation.fromApiDailyItem(Map<String, dynamic>.from(e as Map)))
+          .toList();
+      if (kDebugMode) {
+        debugPrint('[API] daily-items parsed ${out.length} kayıt');
+      }
+      return out;
+    } on Object catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[API] daily-items hata: $e');
+        debugPrint('$st');
+      }
+      return [];
+    }
   }
 
   /// APNs cihaz jetonunu Go `POST /api/push/apns-token` ile kaydeder.

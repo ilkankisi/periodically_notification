@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-/// Ortak alt navigasyon bar - Home ve Detail sayfalarında kullanılır
-/// [activeIndex] aktif tab (0: Ana Sayfa, 1: Keşfet, 2: Kaydedilenler, 3: Profil)
-/// [onTabTap] Herhangi bir tab tıklandığında (index 0..3). Ana sayfa/Keşfet geçişi için kullanılır.
-/// [onHomeTap] Ana Sayfa tıklandığında (Detail sayfasında geri dönüş için). onTabTap yoksa kullanılır.
+/// Ortak alt navigasyon — Figma: ANA SAYFA, KEŞFET (pusula), KAYDEDİLENLER, PROFİL.
+/// [activeIndex]: 0 Ana sayfa, 1 Keşfet, 2 Kaydedilenler, 3 Profil
 class BottomNavBar extends StatelessWidget {
   final int activeIndex;
   final ValueChanged<int>? onTabTap;
@@ -16,53 +15,57 @@ class BottomNavBar extends StatelessWidget {
     this.onHomeTap,
   });
 
-  static const _navItems = [
-    (icon: Icons.home, label: 'Ana Sayfa'),
-    (icon: Icons.explore, label: 'Keşfet'),
-    (icon: Icons.bookmark, label: 'Kaydedilenler'),
-    (icon: Icons.person, label: 'Profil'),
+  static const List<IconData> _iconsIdle = [
+    Icons.home_outlined,
+    Icons.explore_outlined,
+    Icons.bookmark_outline,
+    Icons.person_outline,
+  ];
+
+  static const List<IconData> _iconsActive = [
+    Icons.home_rounded,
+    Icons.explore_rounded,
+    Icons.bookmark_rounded,
+    Icons.person_rounded,
+  ];
+
+  static const List<String> _labels = [
+    'ANA SAYFA',
+    'KEŞFET',
+    'KAYDEDİLENLER',
+    'PROFİL',
   ];
 
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
-    return Container(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomPadding),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1F1F1F),
-        border: Border(top: BorderSide(color: Color(0xFF2C2C2C), width: 1)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              for (var i = 0; i < _navItems.length; i++)
-                _NavItem(
-                  icon: _navItems[i].icon,
-                  label: _navItems[i].label,
-                  active: activeIndex == i,
-                  onTap: () {
-                    if (onTabTap != null) {
-                      onTabTap!(i);
-                    } else if (i == 0 && onHomeTap != null) {
-                      onHomeTap!();
-                    }
-                  },
-                ),
-            ],
+    return Material(
+      color: const Color(0xFF121212),
+      child: Container(
+        padding: EdgeInsets.fromLTRB(12, 10, 12, bottomPadding + 8),
+        decoration: const BoxDecoration(
+          border: Border(
+            top: BorderSide(color: Color(0x18FFFFFF), width: 1),
           ),
-          const SizedBox(height: 8),
-          Container(
-            width: 128,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(9999),
-            ),
-          ),
-        ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            for (var i = 0; i < _labels.length; i++)
+              _NavItem(
+                icon: activeIndex == i ? _iconsActive[i] : _iconsIdle[i],
+                label: _labels[i],
+                active: activeIndex == i,
+                onTap: () {
+                  if (onTabTap != null) {
+                    onTabTap!(i);
+                  } else if (i == 0 && onHomeTap != null) {
+                    onHomeTap!();
+                  }
+                },
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -83,24 +86,33 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? const Color(0xFF2196F3) : const Color(0xFF9CA3AF);
-    return GestureDetector(
+    final color = active ? const Color(0xFF0095FF) : const Color(0xFF9CA3AF);
+    return InkWell(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.notoSans(
+                color: color,
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.35,
+                height: 1.1,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

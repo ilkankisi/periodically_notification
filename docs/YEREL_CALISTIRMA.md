@@ -15,7 +15,7 @@ docker-compose up -d
 ## 2. APNs + admin (sunucudan önce, aynı terminal)
 
 ```bash
-export APNS_KEY_PATH=/Users/ilkankisi/Desktop/pushnotificationSeltification/AuthKey_6UK7V7Z75K.p8
+export APNS_KEY_PATH=//Users/consultechs/Desktop/pushnotificationSeltification/AuthKey_GN4CR3AB3W.p8
 export APNS_KEY_ID=6UK7V7Z75K
 export APNS_TEAM_ID=7U43YTY35S
 export APNS_TOPIC=com.siyazilim.periodicallynotification
@@ -36,6 +36,8 @@ go run ./cmd/server
 
 Kontrol: `curl -s http://localhost:8080/api/health`
 
+**Docker + nginx ile çalışıyorsan (`docker-compose up`):** Telefon veya Safari ile `http://<LAN_IP>/api/health` (port **80**) isteği **konteynerdaki** API’ye gider; **`go run ./cmd/server` terminalinde bu istekler görünmez** — iki ayrı süreç. Telefon trafiğini görmek için: `docker logs -f periodically-api`. Yerelde hızlı deneme için ya sadece Docker kullan ya da sadece `go run` + telefonda `http://<LAN_IP>:8080` (aynı anda ikisini aynı portta çalıştırma).
+
 ## 4. Fiziksel iPhone (API localhost olmaz)
 
 Mac LAN IP (Wi‑Fi genelde `en0`):
@@ -49,7 +51,7 @@ Telefon aynı Wi‑Fi’de olmalı. Flutter:
 
 ```bash
 cd mobile
-flutter run --release --dart-define=API_BASE_URL=http://192.168.1.115:8080
+flutter run --release --dart-define=API_BASE_URL=http://10.11.10.212:8080
 ```
 
 ## 5. Push tetik (token kaydı uygulamadan)

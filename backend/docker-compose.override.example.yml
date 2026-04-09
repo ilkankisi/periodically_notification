@@ -1,0 +1,11 @@
+# Bu dosyayı kopyalayın:  cp docker-compose.override.example.yml docker-compose.override.yml
+# Sonra `volumes` satırının SOL tarafını host’taki .p8 dosyanızın TAM yolu ile değiştirin.
+# `docker-compose.override.yml` git’e eklenmez (.gitignore).
+
+services:
+  api:
+    volumes:
+      - /Users/consultechs/Desktop/motivation/pushnotificationSeltification/AuthKey_GN4CR3AB3W.p8:/run/secrets/apns.p8:ro
+    environment:
+      # Konteyner içi yol sabit; host yolunu yukarıdaki volume sol tarafına yazdınız.
+      APNS_KEY_PATH: /run/secrets/apns.p8

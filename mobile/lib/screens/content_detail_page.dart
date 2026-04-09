@@ -17,7 +17,6 @@ import '../services/moderation_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/user_motivation_service.dart';
 import '../widgets/add_action_card.dart';
-import '../widgets/header_bar.dart';
 import '../widgets/motivation_cached_image.dart';
 import 'login_page.dart';
 
@@ -40,6 +39,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   bool _sendingComment = false;
   Comment? _replyTo;
   String? _reactingCommentId;
+  bool _commentsNewestFirst = true;
 
   @override
   void initState() {
@@ -75,8 +75,12 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   }
 
   List<Comment> _orderedComments() {
-    final roots = _comments.where((c) => c.parentId == null).toList()
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final roots = _comments.where((c) => c.parentId == null).toList();
+    if (_commentsNewestFirst) {
+      roots.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    } else {
+      roots.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    }
     final byParent = <String, List<Comment>>{};
     for (final c in _comments.where((c) => c.parentId != null)) {
       byParent.putIfAbsent(c.parentId!, () => []).add(c);
@@ -226,7 +230,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('İptal', style: TextStyle(color: Color(0xFF2094F3))),
+            child: const Text('İptal', style: TextStyle(color: Color(0xFF0095FF))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -325,7 +329,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   controller.dispose();
                   Navigator.pop(ctx);
                 },
-                child: const Text('İptal', style: TextStyle(color: Color(0xFF2094F3))),
+                child: const Text('İptal', style: TextStyle(color: Color(0xFF0095FF))),
               ),
               FilledButton(
                 onPressed: () {
@@ -333,7 +337,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   controller.dispose();
                   Navigator.pop(ctx, t);
                 },
-                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2094F3)),
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0095FF)),
                 child: const Text('Gönder'),
               ),
             ],
@@ -371,7 +375,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('İptal', style: TextStyle(color: Color(0xFF2094F3))),
+            child: const Text('İptal', style: TextStyle(color: Color(0xFF0095FF))),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -397,142 +401,352 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      body: Column(
+  /// Görsel üzerine bindirilmiş üst bar — Figma 60-889: geri, ortada "Günün Kürasyonu", paylaş.
+  Widget _buildDetailAppBarOverlay() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 0, 4, 0),
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          HeaderBar(
-            leading: SizedBox(
-              width: 40,
-              height: 40,
-              child: IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-                padding: EdgeInsets.zero,
-                style: IconButton.styleFrom(minimumSize: const Size(24, 24)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 56),
+            child: Text(
+              'Günün Kürasyonu',
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.notoSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFFE8E8E8),
+                letterSpacing: 0.2,
               ),
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (widget.item.id.startsWith('user_'))
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   IconButton(
-                    onPressed: _deleteUserContent,
-                    icon: const Icon(Icons.delete_outline, color: Colors.white54, size: 24),
-                    padding: EdgeInsets.zero,
-                    style: IconButton.styleFrom(minimumSize: const Size(40, 40)),
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFFE8E8E8), size: 20),
+                    style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
                   ),
-                IconButton(
-                  onPressed: _toggleSaved,
-                  icon: Icon(
-                    _saved ? Icons.bookmark : Icons.bookmark_border,
-                    color: Colors.white,
-                    size: 24,
+                  if (widget.item.id.startsWith('user_'))
+                    IconButton(
+                      onPressed: _deleteUserContent,
+                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFBFC7D5), size: 22),
+                      style: IconButton.styleFrom(padding: const EdgeInsets.all(8)),
+                    ),
+                ],
+              ),
+              IconButton(
+                onPressed: () => _shareContent(context),
+                icon: const Icon(Icons.ios_share_rounded, color: Color(0xFFE8E8E8), size: 22),
+                style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _heroMetadataLine() {
+    final date = _formatDate(widget.item.sentAt);
+    final a = widget.item.author?.trim();
+    if (a != null && a.isNotEmpty) return '$a • $date';
+    return date;
+  }
+
+  String _formatDayMonthDot(String? sentAt) {
+    if (sentAt == null || sentAt.isEmpty) return '—';
+    final parsed = DateTime.tryParse(sentAt);
+    if (parsed == null) return sentAt;
+    return '${parsed.day.toString().padLeft(2, '0')}-${parsed.month.toString().padLeft(2, '0')}';
+  }
+
+  (String?, String) _articleBodyParts() {
+    final b = widget.item.body.trim();
+    final i = b.indexOf('\n\n');
+    if (i <= 0 || i >= b.length - 2) return (null, b);
+    final intro = b.substring(0, i).trim();
+    final rest = b.substring(i + 2).trim();
+    if (intro.isEmpty || rest.isEmpty) return (null, b);
+    return (intro, rest);
+  }
+
+  Widget _buildInDepthDivider() {
+    final label = '${_formatDayMonthDot(widget.item.sentAt)} · DERİNLEMESİNE';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Divider(color: Color(0x22FFFFFF), height: 1, thickness: 1),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              label,
+              style: GoogleFonts.notoSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.6,
+                color: const Color(0xFF9CA3AF),
+              ),
+            ),
+          ),
+          const Expanded(
+            child: Divider(color: Color(0x22FFFFFF), height: 1, thickness: 1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSaveLibraryCard() {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: _toggleSaved,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: const Color(0xFF1F1F1F),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF2C2C2C)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A2A2A),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  padding: EdgeInsets.zero,
-                  style: IconButton.styleFrom(minimumSize: const Size(40, 40)),
+                  child: Icon(
+                    _saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                    color: const Color(0xFFA1C9FF),
+                    size: 22,
+                  ),
                 ),
-                IconButton(
-                  onPressed: () => _shareContent(context),
-                  icon: const Icon(Icons.share, color: Colors.white, size: 24),
-                  padding: EdgeInsets.zero,
-                  style: IconButton.styleFrom(minimumSize: const Size(40, 40)),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Bu içeriği Sakla',
+                        style: GoogleFonts.notoSans(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFFE2E2E2),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Daha sonra tekrar okumak için kütüphanene ekle.',
+                        style: GoogleFonts.notoSans(
+                          fontSize: 13,
+                          height: 1.35,
+                          color: const Color(0xFF9CA3AF),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                const Icon(Icons.chevron_right_rounded, color: Color(0xFF6B7280), size: 26),
               ],
             ),
           ),
-          // Scrollable content
+        ),
+      ),
+    );
+  }
+
+  static const double _heroImageBodyHeight = 280;
+
+  @override
+  Widget build(BuildContext context) {
+    final pad = MediaQuery.paddingOf(context);
+    final heroTotalH = _heroImageBodyHeight + pad.top;
+    final bodyParts = _articleBodyParts();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF121212),
+      resizeToAvoidBottomInset: true,
+      body: Column(
+        children: [
           Expanded(
             child: SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildHeroImage(),
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                    child: SizedBox(
+                      height: heroTotalH,
+                      width: double.infinity,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Positioned.fill(child: _buildHeroImageLayer(height: heroTotalH)),
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: pad.top + 56,
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.black.withValues(alpha: 0.55),
+                                      Colors.black.withValues(alpha: 0),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              padding: const EdgeInsets.fromLTRB(24, 40, 24, 22),
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Color(0x00121212),
+                                    Color(0xD9121212),
+                                    Color(0xFF121212),
+                                  ],
+                                  stops: [0.0, 0.5, 1.0],
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0095FF),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      (widget.item.category ?? 'Günün İçeriği').toUpperCase(),
+                                      style: GoogleFonts.notoSans(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        height: 1.2,
+                                        letterSpacing: 0.8,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    widget.item.title,
+                                    style: GoogleFonts.newsreader(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.w600,
+                                      fontStyle: FontStyle.italic,
+                                      height: 1.12,
+                                      color: const Color(0xFFF5F5F5),
+                                      letterSpacing: -0.5,
+                                      shadows: const [
+                                        Shadow(
+                                          offset: Offset(0, 1),
+                                          blurRadius: 12,
+                                          color: Color(0x99000000),
+                                        ),
+                                      ],
+                                    ),
+                                    maxLines: 5,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    _heroMetadataLine(),
+                                    style: GoogleFonts.notoSans(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      height: 1.3,
+                                      color: Colors.white.withValues(alpha: 0.88),
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: pad.top,
+                            left: 0,
+                            right: 0,
+                            child: _buildDetailAppBarOverlay(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          widget.item.title,
-                          style: GoogleFonts.newsreader(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w700,
-                            height: 1.0,
-                            color: Colors.white,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.only(top: 4, bottom: 16),
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(color: Colors.white, width: 1),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.category,
-                                color: Color(0xFF2094F3),
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                widget.item.category ?? 'Günün İçeriği',
-                                style: GoogleFonts.notoSans(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  height: 19 / 14,
-                                  color: const Color(0xFF2094F3),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 24),
-                          child: Text(
-                            widget.item.body,
+                        if (bodyParts.$1 != null) ...[
+                          Text(
+                            bodyParts.$1!,
                             style: GoogleFonts.notoSans(
                               fontSize: 17,
                               fontWeight: FontWeight.w400,
-                              height: 23 / 17,
-                              color: const Color(0xFFB0B0B0),
+                              height: 1.55,
+                              color: const Color(0xFFE5E7EB),
                             ),
                           ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.only(top: 24, bottom: 24),
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: Colors.white, width: 1),
+                          _buildInDepthDivider(),
+                          Text(
+                            bodyParts.$2,
+                            style: GoogleFonts.notoSans(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w400,
+                              height: 1.55,
+                              color: const Color(0xFFE5E7EB),
                             ),
                           ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.calendar_today,
-                                color: Color(0xFF6B7280),
-                                size: 18,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _formatDate(widget.item.sentAt),
-                                style: GoogleFonts.notoSans(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  height: 16 / 12,
-                                  color: const Color(0xFF6B7280),
-                                ),
-                              ),
-                            ],
+                        ] else ...[
+                          _buildInDepthDivider(),
+                          Text(
+                            bodyParts.$2,
+                            style: GoogleFonts.notoSans(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w400,
+                              height: 1.55,
+                              color: const Color(0xFFE5E7EB),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 24),
+                        ],
+                        const SizedBox(height: 28),
+                        _buildSaveLibraryCard(),
+                        const SizedBox(height: 20),
                         AddActionCard(
                           quoteId: widget.item.id,
                           quoteTitle: widget.item.title,
@@ -542,8 +756,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                           const SizedBox(height: 24),
                           _buildSavedActionCard(),
                         ],
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 28),
                         _buildCommentsSection(),
+                        SizedBox(height: 88 + pad.bottom),
                       ],
                     ),
                   ),
@@ -551,6 +766,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
               ),
             ),
           ),
+          _buildBottomCommentBar(),
         ],
       ),
     );
@@ -561,25 +777,33 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     final rawDate = _myAction!['localDate'] as String?;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: const Color(0xFF1F1F1F),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2094F3).withValues(alpha: 0.35)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF0095FF).withValues(alpha: 0.35)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x140095FF),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+            spreadRadius: -6,
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.check_circle_outline, color: Color(0xFF2094F3), size: 22),
+              const Icon(Icons.check_circle_outline_rounded, color: Color(0xFFA1C9FF), size: 22),
               const SizedBox(width: 8),
               Text(
                 'Bu sözle yaptığınız',
                 style: GoogleFonts.notoSans(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  color: const Color(0xFFE2E2E2),
                 ),
               ),
             ],
@@ -590,7 +814,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
               rawDate,
               style: GoogleFonts.notoSans(
                 fontSize: 12,
-                color: const Color(0xFF6B7280),
+                color: const Color(0xFFBFC7D5),
               ),
             ),
           ],
@@ -601,7 +825,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
               style: GoogleFonts.notoSans(
                 fontSize: 15,
                 height: 1.45,
-                color: const Color(0xFFB0B0B0),
+                color: const Color(0xFFBFC7D5),
               ),
             ),
           ],
@@ -614,42 +838,85 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 8),
-        Text(
-          'Yorumlar (${_comments.length})',
-          style: GoogleFonts.notoSans(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Yanıt ve tepkiler sosyal puan kazandırır. Uygunsuz yorumları ⋮ menüsünden raporlayabilir veya yazarı engelleyebilirsin.',
-          style: GoogleFonts.notoSans(
-            fontSize: 12,
-            color: const Color(0xFF6B7280),
-            height: 1.3,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Yorumlar (${_comments.length})',
+                style: GoogleFonts.notoSans(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFE2E2E2),
+                ),
+              ),
+            ),
+            PopupMenuButton<String>(
+              padding: EdgeInsets.zero,
+              offset: const Offset(0, 36),
+              color: const Color(0xFF1F1F1F),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onSelected: (v) {
+                setState(() {
+                  _commentsNewestFirst = v == 'newest';
+                });
+              },
+              itemBuilder: (ctx) => [
+                PopupMenuItem(
+                  value: 'newest',
+                  child: Text(
+                    'En Yeni',
+                    style: GoogleFonts.notoSans(
+                      color: _commentsNewestFirst ? const Color(0xFF0095FF) : Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'oldest',
+                  child: Text(
+                    'En Eski',
+                    style: GoogleFonts.notoSans(
+                      color: !_commentsNewestFirst ? const Color(0xFF0095FF) : Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _commentsNewestFirst ? 'En Yeni' : 'En Eski',
+                      style: GoogleFonts.notoSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFFA1C9FF),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFFA1C9FF), size: 20),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
-        // Yorum listesi - Instagram tarzı
         if (_comments.isEmpty)
           Padding(
-            padding: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               'Henüz yorum yok. İlk yorumu siz yapın!',
               style: GoogleFonts.notoSans(
                 fontSize: 14,
-                color: const Color(0xFF6B7280),
+                color: const Color(0xFFBFC7D5),
               ),
             ),
           )
         else
           ..._orderedComments().map((c) => _buildCommentItem(c)),
-        const SizedBox(height: 24),
-        // Yorum input veya giriş prompt
-        AuthService.isLoggedIn ? _buildCommentInput() : _buildLoginToCommentPrompt(),
       ],
     );
   }
@@ -724,7 +991,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                           padding: const EdgeInsets.symmetric(horizontal: 6),
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          foregroundColor: const Color(0xFF2094F3),
+                          foregroundColor: const Color(0xFFA1C9FF),
                         ),
                         child: Text(
                           'Yanıtla',
@@ -778,8 +1045,8 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                               Icons.thumb_up_alt_outlined,
                               size: 16,
                               color: c.myReaction == 1
-                                  ? const Color(0xFF2094F3)
-                                  : const Color(0xFF6B7280),
+                                  ? const Color(0xFFA1C9FF)
+                                  : const Color(0xFF9CA3AF),
                             ),
                             const SizedBox(width: 4),
                             Text(
@@ -830,21 +1097,87 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     );
   }
 
-  Widget _buildCommentInput() {
+  Widget _buildBottomCommentBar() {
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    return Material(
+      color: const Color(0xFF121212),
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: inset),
+        child: SafeArea(
+          top: false,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: const BoxDecoration(
+              color: Color(0xFF121212),
+              border: Border(
+                top: BorderSide(color: Color(0x18FFFFFF), width: 1),
+              ),
+            ),
+            child: AuthService.isLoggedIn ? _buildCommentComposerRow() : _buildGuestBottomComposer(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuestBottomComposer() {
+    return Material(
+      color: const Color(0xFF1A1A1A),
+      borderRadius: BorderRadius.circular(28),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: _openLogin,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Düşüncelerini paylaş...',
+                  style: GoogleFonts.notoSans(
+                    fontSize: 15,
+                    color: const Color(0xFF6B7280),
+                  ),
+                ),
+              ),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFF2A2A2A),
+                ),
+                child: const Icon(Icons.send_rounded, color: Color(0xFF4B5563), size: 20),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCommentComposerRow() {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_replyTo != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Material(
-              color: const Color(0xFF1F2937),
-              borderRadius: BorderRadius.circular(10),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1F1F1F),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0x14FFFFFF)),
+              ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
                   children: [
-                    Icon(Icons.reply, size: 18, color: Colors.blue.shade300),
+                    const Icon(Icons.reply_rounded, size: 18, color: Color(0xFFA1C9FF)),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -869,107 +1202,111 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
             ),
           ),
         Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        CircleAvatar(
-          radius: 16,
-          backgroundColor: const Color(0xFF374151),
-          backgroundImage: AuthService.photoUrl != null &&
-                  AuthService.photoUrl!.isNotEmpty
-              ? CachedNetworkImageProvider(AuthService.photoUrl!)
-              : null,
-          child: AuthService.photoUrl == null || AuthService.photoUrl!.isEmpty
-              ? Text(
-                  (AuthService.displayName?.isNotEmpty == true
-                          ? AuthService.displayName![0]
-                          : '?')
-                      .toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                )
-              : null,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: TextField(
-            controller: _commentController,
-            style: GoogleFonts.notoSans(
-              fontSize: 14,
-              color: Colors.white,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: const Color(0xFF374151),
+              backgroundImage: AuthService.photoUrl != null && AuthService.photoUrl!.isNotEmpty
+                  ? CachedNetworkImageProvider(AuthService.photoUrl!)
+                  : null,
+              child: AuthService.photoUrl == null || AuthService.photoUrl!.isEmpty
+                  ? Text(
+                      (AuthService.displayName?.isNotEmpty == true
+                              ? AuthService.displayName![0]
+                              : '?')
+                          .toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  : null,
             ),
-            decoration: InputDecoration(
-              hintText: _replyTo != null ? 'Yanıtını yaz...' : 'Yorum ekle...',
-              hintStyle: GoogleFonts.notoSans(
-                fontSize: 14,
-                color: const Color(0xFF6B7280),
-              ),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                vertical: 10,
-                horizontal: 12,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-                borderSide: const BorderSide(color: Color(0xFF374151)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-                borderSide: const BorderSide(color: Color(0xFF374151)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-                borderSide: const BorderSide(color: Color(0xFF2094F3)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: _commentController,
+                style: GoogleFonts.notoSans(
+                  fontSize: 15,
+                  color: Colors.white,
+                ),
+                decoration: InputDecoration(
+                  hintText: _replyTo != null ? 'Yanıtını yaz...' : 'Düşüncelerini paylaş...',
+                  hintStyle: GoogleFonts.notoSans(
+                    fontSize: 15,
+                    color: const Color(0xFF6B7280),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFF1A1A1A),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 16,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(26),
+                    borderSide: const BorderSide(color: Color(0xFF333333)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(26),
+                    borderSide: const BorderSide(color: Color(0xFF333333)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(26),
+                    borderSide: const BorderSide(color: Color(0xFF0095FF), width: 1.5),
+                  ),
+                ),
+                maxLines: 4,
+                minLines: 1,
+                onSubmitted: (_) => _postComment(),
               ),
             ),
-            maxLines: 3,
-            minLines: 1,
-            onSubmitted: (_) => _postComment(),
-          ),
+            const SizedBox(width: 10),
+            _buildGradientSendButton(),
+          ],
         ),
-        const SizedBox(width: 8),
-        IconButton(
-          onPressed: _sendingComment ? null : _postComment,
-          icon: _sendingComment
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Color(0xFF2094F3),
-                  ),
-                )
-              : const Icon(Icons.send, color: Color(0xFF2094F3), size: 24),
-        ),
-      ],
-    ),
       ],
     );
   }
 
-  Widget _buildLoginToCommentPrompt() {
-    return GestureDetector(
-      onTap: _openLogin,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1F2937),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.login, color: const Color(0xFF2094F3), size: 20),
-            const SizedBox(width: 12),
-            Text(
-              'Giriş yaparak yorum yapabilirsiniz',
-              style: GoogleFonts.notoSans(
-                fontSize: 14,
-                color: const Color(0xFF9CA3AF),
+  Widget _buildGradientSendButton() {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: _sendingComment ? null : _postComment,
+          child: Ink(
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0095FF),
+                  Color(0xFF0070E0),
+                ],
               ),
             ),
-          ],
+            child: Center(
+              child: _sendingComment
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
+            ),
+          ),
         ),
       ),
     );
@@ -985,48 +1322,46 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     return '${dateTime.day}.${dateTime.month}.${dateTime.year}';
   }
 
-  Widget _buildHeroImage() {
+  /// Hero görsel katmanı (tam yükseklik; üst bar + başlık Stack içinde).
+  Widget _buildHeroImageLayer({required double height}) {
     final item = widget.item;
-    return SizedBox(
-      width: double.infinity,
-      height: 288,
-      child: item.imageBase64 != null
-          ? Image.memory(
-              base64Decode(item.imageBase64!),
-              fit: BoxFit.fitHeight,
-              width: double.infinity,
-              height: 288,
-            )
-          : (item.displayImageUrl != null && item.displayImageUrl!.isNotEmpty
-              ? MotivationCachedImage(
-                  imageUrl: item.displayImageUrl!,
-                  fit: BoxFit.fitHeight,
-                  width: double.infinity,
-                  height: 288,
-                  placeholder: (_, __) => Container(
-                    color: const Color(0xFF27272A),
-                    child: const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF2094F3)),
-                    ),
+    return item.imageBase64 != null
+        ? Image.memory(
+            base64Decode(item.imageBase64!),
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: height,
+          )
+        : (item.displayImageUrl != null && item.displayImageUrl!.isNotEmpty
+            ? MotivationCachedImage(
+                imageUrl: item.displayImageUrl!,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: height,
+                placeholder: (_, __) => Container(
+                  color: const Color(0xFF0E0E0E),
+                  child: const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF0095FF)),
                   ),
-                  error: (_, __, ___) => Container(
-                    color: const Color(0xFF27272A),
-                    child: const Icon(
-                      Icons.image_not_supported,
-                      color: Color(0xFF6B7280),
-                      size: 48,
-                    ),
-                  ),
-                )
-              : Container(
-                  color: const Color(0xFF27272A),
+                ),
+                error: (_, __, ___) => Container(
+                  color: const Color(0xFF0E0E0E),
                   child: const Icon(
-                    Icons.image,
+                    Icons.image_not_supported_outlined,
                     color: Color(0xFF6B7280),
-                    size: 64,
+                    size: 48,
                   ),
-                )),
-    );
+                ),
+              )
+            : Container(
+                color: const Color(0xFF0E0E0E),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.image_outlined,
+                  color: Color(0xFF6B7280),
+                  size: 64,
+                ),
+              ));
   }
 
   String _formatDate(String? sentAt) {
@@ -1051,13 +1386,13 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     if (!context.mounted) return;
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1F2937),
+      backgroundColor: const Color(0xFF1F1F1F),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 24),
+          padding: const EdgeInsets.symmetric(vertical: 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1069,7 +1404,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                     color: const Color(0xFF25D366),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.chat, color: Colors.white, size: 24),
+                  child: const Icon(Icons.chat_rounded, color: Colors.white, size: 24),
                 ),
                 title: Text(
                   'WhatsApp ile Paylaş',
@@ -1101,10 +1436,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF374151),
+                    color: const Color(0xFF2A2A2A),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.share, color: Colors.white, size: 24),
+                  child: const Icon(Icons.share_rounded, color: Color(0xFFA1C9FF), size: 24),
                 ),
                 title: Text(
                   'Diğer uygulamalarla paylaş',

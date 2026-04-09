@@ -30,6 +30,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ginLogFormatter — nginx arkasında gerçek istemci IP’si için ClientIP() + X-Forwarded-For satırda.
+func ginLogFormatter(param gin.LogFormatterParams) string {
+	suffix := ""
+	if xff := param.Request.Header.Get("X-Forwarded-For"); xff != "" {
+		suffix = fmt.Sprintf(" | X-Forwarded-For: %s", xff)
+	}
+	return fmt.Sprintf("[GIN] %v | %3d | %13v | %15s | %-7s %s%s\n",
+		param.TimeStamp.Format("2006/01/02 - 15:04:05"),
+		param.StatusCode,
+		param.Latency,
+		param.ClientIP,
+		param.Method,
+		param.Path,
+		suffix,
+	)
+}
+
 func main() {
 	// 1. Config yükle (env değişkenleri)
 	cfg := config.Load()
@@ -69,7 +86,14 @@ func main() {
 	storageHandler := &storage.Handler{Storage: minioClient}
 
 	// 5. Gin router (max 5MB multipart - görsel yükleme için)
-	r := gin.Default()
+	r := gin.New()
+	proxies := config.SplitComma(cfg.TrustedProxies)
+	if err := r.SetTrustedProxies(proxies); err != nil {
+		log.Fatalf("TRUSTED_PROXIES: %v", err)
+	}
+	log.Printf("Gin trusted proxies: %v", proxies)
+	r.Use(gin.LoggerWithFormatter(ginLogFormatter))
+	r.Use(gin.Recovery())
 	r.MaxMultipartMemory = 5 << 20
 
 	// CORS

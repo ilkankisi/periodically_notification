@@ -9,7 +9,7 @@ import '../services/gamification_service.dart';
 import '../services/notification_badge_controller.dart';
 import '../services/notification_store_service.dart';
 
-/// Giriş sayfası - Apple ve Google ile giriş
+/// Giriş sayfası — Apple ve Google ile giriş ([Figma](https://www.figma.com/design/v3UoAoZoaW92TprwR8CSk1/Periodicly-Notification?node-id=60-1024)).
 class LoginPage extends StatefulWidget {
   const LoginPage({
     super.key,
@@ -26,6 +26,12 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   bool _loading = false;
   String? _errorMessage;
+
+  static const Color _bg = Color(0xFF131313);
+  static const Color _accent = Color(0xFFA1C9FF);
+  static const Color _muted = Color(0xFFBFC7D5);
+  static const Color _borderSubtle = Color(0x14FFFFFF);
+  static const Color _cardFill = Color(0xFF1F1F1F);
 
   Future<void> _signInWithApple() async {
     if (!await SignInWithApple.isAvailable()) {
@@ -86,110 +92,194 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     final isAppleAvailable = Platform.isIOS || Platform.isMacOS;
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: _bg,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(flex: 2),
-              Text(
-                'DAHA',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.newsreader(
-                  fontSize: 36,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 4, 8, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  onPressed: _loading ? null : () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _accent, size: 20),
+                  style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Yorum yapmak ve paylaşmak için giriş yapın',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.notoSans(
-                  fontSize: 16,
-                  color: const Color(0xFF9CA3AF),
-                ),
-              ),
-              const Spacer(flex: 1),
-              if (_errorMessage != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: Colors.redAccent, fontSize: 14),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              if (isAppleAvailable)
-                _buildSignInButton(
-                  label: 'Apple ile Giriş Yap',
-                  icon: Icons.apple,
-                  onPressed: _loading ? null : _signInWithApple,
-                ),
-              if (isAppleAvailable) const SizedBox(height: 12),
-              _buildSignInButton(
-                label: 'Google ile Giriş Yap',
-                icon: Icons.g_mobiledata_rounded,
-                onPressed: _loading ? null : _signInWithGoogle,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Hesabınız yoksa otomatik oluşturulur',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.notoSans(
-                  fontSize: 13,
-                  color: const Color(0xFF6B7280),
-                ),
-              ),
-              const SizedBox(height: 24),
-              if (_loading)
-                const Center(
-                  child: SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(0xFF2094F3),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 8),
+                    Center(
+                      child: Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: const Color(0x1AA1C9FF),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: _borderSubtle),
+                        ),
+                        child: const Icon(Icons.lock_outline_rounded, color: _accent, size: 34),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 28),
+                    Text(
+                      'Giriş yap',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.newsreader(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w700,
+                        height: 1.15,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Yorum yapmak ve paylaşmak için hesabınıza giriş yapın.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.notoSans(
+                        fontSize: 15,
+                        height: 1.45,
+                        color: _muted,
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+                    if (_errorMessage != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0x1AFF6B6B),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0x33FF6B6B)),
+                        ),
+                        child: Text(
+                          _errorMessage!,
+                          style: GoogleFonts.notoSans(
+                            color: const Color(0xFFFFB4B4),
+                            fontSize: 14,
+                            height: 1.35,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                    if (isAppleAvailable)
+                      _buildAppleButton(
+                        onPressed: _loading ? null : _signInWithApple,
+                      ),
+                    if (isAppleAvailable) const SizedBox(height: 12),
+                    _buildGoogleButton(
+                      onPressed: _loading ? null : _signInWithGoogle,
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Hesabınız yoksa ilk girişte otomatik oluşturulur.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.notoSans(
+                        fontSize: 13,
+                        height: 1.4,
+                        color: const Color(0xFF9CA3AF),
+                      ),
+                    ),
+                    if (_loading) ...[
+                      const SizedBox(height: 28),
+                      const Center(
+                        child: SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF0095FF),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              const Spacer(flex: 2),
-            ],
-          ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildSignInButton({
-    required String label,
-    required IconData icon,
-    VoidCallback? onPressed,
-  }) {
+  Widget _buildAppleButton({VoidCallback? onPressed}) {
     return SizedBox(
-      height: 52,
-      child: OutlinedButton(
+      height: 54,
+      child: ElevatedButton(
         onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.white,
-          side: const BorderSide(color: Color(0xFF374151)),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          disabledBackgroundColor: const Color(0xFF3F3F3F),
+          disabledForegroundColor: const Color(0xFF9CA3AF),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 24, color: Colors.white),
-            const SizedBox(width: 12),
-            Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+            Icon(
+              Icons.apple,
+              size: 26,
+              color: onPressed == null ? const Color(0xFF9CA3AF) : Colors.black,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Apple ile devam et',
+              style: GoogleFonts.notoSans(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: onPressed == null ? const Color(0xFF9CA3AF) : Colors.black,
+              ),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGoogleButton({VoidCallback? onPressed}) {
+    return SizedBox(
+      height: 54,
+      child: Material(
+        color: _cardFill,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(14),
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _borderSubtle),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.g_mobiledata_rounded,
+                  size: 32,
+                  color: onPressed == null ? const Color(0xFF6B7280) : const Color(0xFF4285F4),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Google ile devam et',
+                  style: GoogleFonts.notoSans(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: onPressed == null ? const Color(0xFF6B7280) : Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

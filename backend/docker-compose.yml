@@ -1,8 +1,12 @@
 # docker-compose.yml
 #
 # NEDEN DOCKER COMPOSE?
-# Tüm altyapıyı (PostgreSQL, RabbitMQ, MinIO) tek komutla ayağa kaldırırsın.
-# "docker compose up -d" = hepsi hazır. Başka makinede de aynı ortam.
+# PostgreSQL, RabbitMQ, MinIO + Go API + nginx reverse proxy tek komutla.
+# Dış erişim: nginx 80 → api:8080. Örnek: curl http://<LAN-IP>/api/health
+#
+# WAN / kamu IP: router'da 80 (ve gerekirse 9000 MinIO) port yönlendirmesi + güvenlik duvarı.
+# MINIO_PUBLIC_URL: mobil/curl ile dönen görsel URL'leri için dışarıdan erişilebilir taban
+# (örn. http://EV_IP:9000 veya domain). compose çalıştırmadan önce export edin veya .env'e yazın.
 
 services:
   # PostgreSQL - ana veritabanı
@@ -51,8 +55,73 @@ services:
     volumes:
       - miniodata:/data
     ports:
-      - "9000:9000"  # S3 API
+      - "9000:9000"  # S3 API (dış ağdan görsel URL için genelde bu port da açılır)
       - "9001:9001"  # Web Console: http://localhost:9001
+
+  # Go API — Dockerfile ile build
+  # APNs (.p8): host yolunu konteynıra bağlamak için docker-compose.override.example.yml → docker-compose.override.yml kopyalayın ve yolu düzenleyin.
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: periodically-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: app
+      DB_PASSWORD: secret
+      DB_NAME: periodically
+      DB_SSLMODE: disable
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: motivationpictures
+      MINIO_USE_SSL: "false"
+      # Dış dünyadan erişim: örn. http://123.45.67.89:9000 — host makinede export MINIO_PUBLIC_URL=... veya .env
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://127.0.0.1:9000}
+      PORT: "8080"
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      ADMIN_SECRET: ${ADMIN_SECRET:-}
+      APNS_KEY_PATH: ${APNS_KEY_PATH:-}
+      APNS_KEY_ID: ${APNS_KEY_ID:-}
+      APNS_TEAM_ID: ${APNS_TEAM_ID:-}
+      APNS_TOPIC: ${APNS_TOPIC:-}
+      APNS_PRODUCTION: ${APNS_PRODUCTION:-false}
+      GOOGLE_OAUTH_CLIENT_IDS: ${GOOGLE_OAUTH_CLIENT_IDS:-}
+      APPLE_CLIENT_IDS: ${APPLE_CLIENT_IDS:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_AUTH_CREDENTIALS_PATH: ${FIREBASE_AUTH_CREDENTIALS_PATH:-}
+      # Gin ClientIP() — nginx arkası; virgülle CIDR (örn. 172.16.0.0/12)
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1,172.16.0.0/12,192.168.0.0/16,10.0.0.0/8}
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+
+  # nginx — tek giriş noktası (80); API'ye proxy
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: periodically-nginx
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      # Makinede 80 doluysa örn. "8080:80" yapıp http://IP:8080 kullanın
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   pgdata:

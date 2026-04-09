@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'services/api_config.dart';
 import 'services/auth_service.dart';
 import 'services/backend_service.dart';
 import 'services/onboarding_service.dart';
@@ -19,6 +20,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   appLog('main() başladı');
   try {
+    ApiConfig.debugLogResolvedUrl();
     await BackendService.loadStoredToken();
     await AuthService.loadCachedSession();
     appLog('BackendService + AuthService oturum yüklendi');
@@ -215,7 +217,7 @@ class _MainShellState extends State<_MainShell> {
               destinations: _destinations
                   .map((d) => NavigationRailDestination(
                         icon: Icon(d.icon, color: const Color(0xFF9CA3AF)),
-                        selectedIcon: Icon(d.icon, color: const Color(0xFF2094F3)),
+                        selectedIcon: Icon(d.icon, color: const Color(0xFF0095FF)),
                         label: Text(d.label, style: const TextStyle(color: Colors.white, fontSize: 12)),
                       ))
                   .toList(),

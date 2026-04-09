@@ -13,12 +13,21 @@ class AddActionCard extends StatefulWidget {
   final String quoteTitle;
   /// Aksiyon sunucuya kaydedildikten sonra (tebrik diyaloğu kapatıldıktan sonra).
   final VoidCallback? onActionSaved;
+  /// null: varsayılan başlık; anasayfa Figma için örn. «BUGÜN BU SÖZLE NE YAPTIN?»
+  final String? titleText;
+  /// null: varsayılan ipucu metni.
+  final String? hintText;
+  /// false: açıklama paragrafını gizler (anasayfa kompakt kart).
+  final bool showDescription;
 
   const AddActionCard({
     super.key,
     required this.quoteId,
     required this.quoteTitle,
     this.onActionSaved,
+    this.titleText,
+    this.hintText,
+    this.showDescription = true,
   });
 
   @override
@@ -76,7 +85,7 @@ class _AddActionCardState extends State<AddActionCard> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2094F3)),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0095FF)),
             child: const Text('Evet', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -150,7 +159,7 @@ class _AddActionCardState extends State<AddActionCard> {
         actions: [
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2094F3)),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0095FF)),
             child: const Text('Tamam', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -170,68 +179,106 @@ class _AddActionCardState extends State<AddActionCard> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF1F2937),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF374151)),
+        color: const Color(0xFF1F1F1F),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF2C2C2C)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Bugün bu sözle ne yaptın?',
+            widget.titleText ?? 'Bugün bu sözle ne yaptın?',
             style: GoogleFonts.notoSans(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
+              fontSize: widget.titleText != null ? 13 : 17,
+              fontWeight: FontWeight.w800,
+              letterSpacing: widget.titleText != null ? 0.6 : 0,
+              height: 1.25,
+              color: const Color(0xFFE2E2E2),
             ),
           ),
-          const SizedBox(height: 12),
+          if (widget.showDescription) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Pratiğe dökülmeyen bilgi sadece yüktür. Aksiyonunu kaydet.',
+              style: GoogleFonts.notoSans(
+                fontSize: 13,
+                height: 1.45,
+                fontWeight: FontWeight.w400,
+                color: const Color(0xFF9CA3AF),
+              ),
+            ),
+          ],
+          SizedBox(height: widget.showDescription ? 16 : 14),
           TextField(
             controller: _controller,
-            style: GoogleFonts.notoSans(fontSize: 14, color: Colors.white),
+            style: GoogleFonts.notoSans(fontSize: 15, color: Colors.white, height: 1.4),
             decoration: InputDecoration(
-              hintText: 'Örn: Sabah erken kalktım, kitap okudum...',
-              hintStyle: GoogleFonts.notoSans(fontSize: 14, color: const Color(0xFF6B7280)),
+              hintText: widget.hintText ?? 'Aksiyonunu buraya yaz...',
+              hintStyle: GoogleFonts.notoSans(fontSize: 15, color: const Color(0xFF6B7280)),
+              filled: true,
+              fillColor: const Color(0xFF141414),
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+              contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF374151)),
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF333333)),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF374151)),
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF333333)),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF2094F3)),
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF0095FF), width: 1.5),
               ),
             ),
-            maxLines: 3,
-            minLines: 1,
+            maxLines: 4,
+            minLines: 3,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            child: FilledButton(
-              onPressed: _sending ? null : _onAddAction,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF2094F3),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            height: 50,
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: _sending ? null : _onAddAction,
+                child: Ink(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Color(0xFF0095FF),
+                        Color(0xFF0070E0),
+                      ],
+                    ),
+                  ),
+                  child: Center(
+                    child: _sending
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            'Aksiyon Ekle',
+                            style: GoogleFonts.notoSans(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
               ),
-              child: _sending
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Aksiyon Ekle', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
           ),
         ],

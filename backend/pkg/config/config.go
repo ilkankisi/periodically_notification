@@ -45,6 +45,10 @@ type Config struct {
 	// OAuth (Faz 2): virgülle ayrılmış client id / bundle id listesi
 	GoogleOAuthClientIDs string
 	AppleClientIDs       string
+
+	// TrustedProxies — virgülle ayrılmış CIDR veya IP; Gin ClientIP() için (nginx arkasında gerçek IP).
+	// Boşsa varsayılan: loopback + RFC1918 + Docker köprü (172.16/12).
+	TrustedProxies string
 }
 
 // Load ortam değişkenlerinden config yükler.
@@ -81,6 +85,8 @@ func Load() *Config {
 
 		GoogleOAuthClientIDs: getEnv("GOOGLE_OAUTH_CLIENT_IDS", "596975805185-aqd5ans8g8sdjt27kiok5bg20runlfjo.apps.googleusercontent.com"),
 		AppleClientIDs:       getEnv("APPLE_CLIENT_IDS", "com.siyazilim.periodicallynotification"),
+
+		TrustedProxies: getEnv("TRUSTED_PROXIES", "127.0.0.1,172.16.0.0/12,192.168.0.0/16,10.0.0.0/8"),
 	}
 }
 

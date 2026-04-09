@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../services/notification_badge_controller.dart';
 
-/// Uygulama genelinde kullanılan üst bar.
+/// Uygulama genelinde kullanılan üst bar (koyu tema, editorial başlık).
 class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final bool showBackButton;
   final VoidCallback? onBack;
   final VoidCallback? onNotificationsTap;
   final VoidCallback? onChainTap;
+
+  /// Örn. Zincir hub: yarı saydam bar + başlık 24px / #E2E2E2 (Figma TopAppBar).
+  final Color? backgroundColor;
+  final bool hubTitleStyle;
 
   const AppTopBar({
     super.key,
@@ -17,7 +22,21 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
     this.onBack,
     this.onNotificationsTap,
     this.onChainTap,
+    this.backgroundColor,
+    this.hubTitleStyle = false,
   });
+
+  static const Color _bg = Color(0xFF131313);
+  static const Color _accent = Color(0xFFA1C9FF);
+  static const Color _iconMuted = Color(0xFFBFC7D5);
+
+  /// Alt kabuktaki sayfalar ve özel üst çubuklar için ortalanmış başlık tipografisi (Newsreader).
+  static TextStyle centeredTitleStyle({Color color = Colors.white}) => GoogleFonts.newsreader(
+        color: color,
+        fontSize: 22,
+        fontWeight: FontWeight.w600,
+        height: 1.2,
+      );
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -25,31 +44,37 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final badge = NotificationBadgeController.instance;
-    final hasUnread = badge.unreadCount > 0;
 
     return AppBar(
-      backgroundColor: const Color(0xFF2196F3),
+      backgroundColor: backgroundColor ?? _bg,
+      surfaceTintColor: Colors.transparent,
       elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: true,
       automaticallyImplyLeading: false,
       leading: showBackButton
           ? IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _accent, size: 20),
               onPressed: onBack ?? () => Navigator.of(context).maybePop(),
             )
           : null,
       title: Text(
         title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 20,
-          fontWeight: FontWeight.w500,
-        ),
+        style: hubTitleStyle
+            ? GoogleFonts.newsreader(
+                color: const Color(0xFFE2E2E2),
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                height: 32 / 24,
+                letterSpacing: -0.6,
+              )
+            : centeredTitleStyle(),
       ),
       actions: [
         if (onChainTap != null)
           IconButton(
             tooltip: 'Aksiyon zinciri',
-            icon: const Icon(Icons.link, color: Colors.white),
+            icon: const Icon(Icons.link_rounded, color: _iconMuted, size: 22),
             onPressed: onChainTap,
           ),
         if (onNotificationsTap != null)
@@ -65,8 +90,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
                   children: [
                     IconButton(
                       tooltip: 'Bildirimler',
-                      icon:
-                          const Icon(Icons.notifications_none, color: Colors.white),
+                      icon: const Icon(Icons.notifications_none_rounded, color: _iconMuted, size: 24),
                       onPressed: onNotificationsTap,
                     ),
                     if (showBadge)
@@ -76,7 +100,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
                         child: Container(
                           padding: const EdgeInsets.all(3),
                           decoration: const BoxDecoration(
-                            color: Colors.red,
+                            color: Color(0xFFE53935),
                             shape: BoxShape.circle,
                           ),
                           constraints: const BoxConstraints(
@@ -104,4 +128,3 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 }
-

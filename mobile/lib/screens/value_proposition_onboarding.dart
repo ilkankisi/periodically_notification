@@ -58,28 +58,9 @@ class _ValuePropositionOnboardingState extends State<ValuePropositionOnboarding>
                   controller: _controller,
                   onPageChanged: (i) => setState(() => _page = i),
                   children: [
-                    _OnboardingPage(
-                      icon: Icons.bolt,
-                      title: 'Motive ol, kayda geç',
-                      body:
-                          'DAHA sadece alıntı göstermez. Her gün bir içerikle tetiklenirsin; asıl güç, o gün '
-                          'için yazdığın somut eylemdir. "Bugün bu sözle ne yaptın?" sorusu alışkanlığını ölçülebilir yapar.',
-                    ),
-                    _OnboardingPage(
-                      icon: Icons.link,
-                      title: 'Zincir ve rozetler',
-                      body:
-                          'Eylemlerini biriktirerek serini (streak) ve zincir görünümlerini güçlendirirsin. '
-                          'Rozetler ve sosyal puanlar ilerlemeni görünür kılar — motivasyonu davranışa bağlar.',
-                    ),
-                    _OnboardingPage(
-                      icon: Icons.forum_outlined,
-                      title: 'Topluluk, güvende',
-                      body:
-                          'Yorumlarla diğer kullanıcılarla tartışabilir, yanıt verebilirsin. Uygunsuz içerik için '
-                          'yorumları raporlayabilir veya kullanıcıyı engelleyebilirsin. Hesap isteğe bağlıdır; '
-                          'giriş yaparak verilerini bulutta birleştirebilirsin.',
-                    ),
+                    const _FirstOnboardingPage(),
+                    const _SecondOnboardingPage(),
+                    const _ThirdOnboardingPage(),
                   ],
                 ),
               ),
@@ -115,6 +96,7 @@ class _ValuePropositionOnboardingState extends State<ValuePropositionOnboarding>
                         style: GoogleFonts.notoSans(
                           color: const Color(0xFF9CA3AF),
                           fontWeight: FontWeight.w600,
+                          letterSpacing: _page == 1 ? 0.7 : 0,
                         ),
                       ),
                     )
@@ -133,14 +115,44 @@ class _ValuePropositionOnboardingState extends State<ValuePropositionOnboarding>
                         }
                       },
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF2094F3),
+                        backgroundColor:
+                            _page <= 1 ? Colors.transparent : const Color(0xFF2094F3),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(_page <= 1 ? 999 : 12),
+                        ),
+                        shadowColor: _page <= 1 ? const Color(0x33A1C9FF) : null,
+                        elevation: _page <= 1 ? 0 : null,
                       ),
-                      child: Text(
-                        _page < 2 ? 'Devam' : 'Uygulamaya geç',
-                        style: GoogleFonts.notoSans(fontSize: 16, fontWeight: FontWeight.w700),
+                      child: Ink(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(_page <= 1 ? 999 : 12),
+                          gradient: _page <= 1
+                              ? const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Color(0xFF0095FF),
+                                    Color(0xFF004880),
+                                  ],
+                                )
+                              : null,
+                          color: _page <= 1 ? null : const Color(0xFF2094F3),
+                        ),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          alignment: Alignment.center,
+                          child: Text(
+                            _page < 2 ? 'Devam' : 'UYGULAMAYA GEÇ',
+                            style: GoogleFonts.notoSans(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: _page <= 1 ? 1.6 : 0,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -154,52 +166,266 @@ class _ValuePropositionOnboardingState extends State<ValuePropositionOnboarding>
   }
 }
 
-class _OnboardingPage extends StatelessWidget {
-  const _OnboardingPage({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
-  final IconData icon;
-  final String title;
-  final String body;
+class _FirstOnboardingPage extends StatelessWidget {
+  const _FirstOnboardingPage();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
       children: [
-        const SizedBox(height: 24),
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            color: const Color(0xFF2094F3).withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(20),
+        Positioned(
+          right: -80,
+          top: 140,
+          child: Container(
+            width: 256,
+            height: 256,
+            decoration: BoxDecoration(
+              color: const Color(0x0D0095FF),
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x1A0095FF),
+                  blurRadius: 48,
+                  spreadRadius: 8,
+                ),
+              ],
+            ),
           ),
-          child: Icon(icon, size: 36, color: const Color(0xFF2094F3)),
         ),
-        const SizedBox(height: 28),
-        Text(
-          title,
-          style: GoogleFonts.newsreader(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-            height: 1.15,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          body,
-          style: GoogleFonts.notoSans(
-            fontSize: 16,
-            height: 1.5,
-            color: const Color(0xFFB0B0B0),
+        SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 24, 12, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1F1F1F),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x14A1C9FF),
+                        blurRadius: 40,
+                        offset: Offset(0, 10),
+                        spreadRadius: -10,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.bolt, color: Color(0xFFA1C9FF), size: 40),
+                ),
+                const SizedBox(height: 48),
+                Text(
+                  'Motive ol,\nkayda geç.',
+                  style: GoogleFonts.newsreader(
+                    fontSize: 48,
+                    fontWeight: FontWeight.w600,
+                    height: 1.25,
+                    letterSpacing: -1.2,
+                    color: const Color(0xFFE2E2E2),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                RichText(
+                  text: TextSpan(
+                    style: GoogleFonts.notoSans(
+                      fontSize: 18,
+                      height: 1.625,
+                      color: const Color(0xFFBFC7D5),
+                    ),
+                    children: [
+                      const TextSpan(text: 'DAHA sadece alıntı göstermez.\n'),
+                      const TextSpan(text: 'Her gün bir içerikle tetiklenirsin;\n'),
+                      const TextSpan(text: 'asıl güç, o gün için yazdığın somut\n'),
+                      const TextSpan(text: 'eylemdir. '),
+                      TextSpan(
+                        text: '"Bugün bu sözle ne yaptın?"\n',
+                        style: GoogleFonts.newsreader(
+                          fontSize: 36 / 2,
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w500,
+                          height: 1.625,
+                          color: const Color(0xFFA1C9FF),
+                        ),
+                      ),
+                      const TextSpan(text: 'sorusu alışkanlığını ölçülebilir\n'),
+                      const TextSpan(text: 'yapar.'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 }
+
+class _SecondOnboardingPage extends StatelessWidget {
+  const _SecondOnboardingPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned(
+          right: -80,
+          top: 140,
+          child: Container(
+            width: 256,
+            height: 256,
+            decoration: BoxDecoration(
+              color: const Color(0x0D0095FF),
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x1A0095FF),
+                  blurRadius: 48,
+                  spreadRadius: 8,
+                ),
+              ],
+            ),
+          ),
+        ),
+        SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 24, 12, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1F1F1F),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x14A1C9FF),
+                        blurRadius: 40,
+                        offset: Offset(0, 10),
+                        spreadRadius: -10,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.link_rounded, color: Color(0xFFA1C9FF), size: 40),
+                ),
+                const SizedBox(height: 48),
+                Text(
+                  'Zincir ve\nrozetler',
+                  style: GoogleFonts.newsreader(
+                    fontSize: 48,
+                    fontWeight: FontWeight.w600,
+                    height: 1.25,
+                    letterSpacing: -1.2,
+                    color: const Color(0xFFE2E2E2),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Eylemlerini biriktirerek serini\n'
+                  '(streak) ve zincir görünümlerini\n'
+                  'güçlendirirsin. Rozetler ve sosyal\n'
+                  'puanlar ilerlemeni görünür kılar —\n'
+                  'motivasyonu davranışa bağlar.',
+                  style: GoogleFonts.notoSans(
+                    fontSize: 18,
+                    height: 1.625,
+                    color: const Color(0xFFBFC7D5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ThirdOnboardingPage extends StatelessWidget {
+  const _ThirdOnboardingPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned(
+          right: -80,
+          top: 140,
+          child: Container(
+            width: 256,
+            height: 256,
+            decoration: BoxDecoration(
+              color: const Color(0x0D0095FF),
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x1A0095FF),
+                  blurRadius: 48,
+                  spreadRadius: 8,
+                ),
+              ],
+            ),
+          ),
+        ),
+        SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 24, 12, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1F1F1F),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x14A1C9FF),
+                        blurRadius: 40,
+                        offset: Offset(0, 10),
+                        spreadRadius: -10,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.forum_outlined, color: Color(0xFFA1C9FF), size: 40),
+                ),
+                const SizedBox(height: 48),
+                Text(
+                  'Topluluk,\ngüvende',
+                  style: GoogleFonts.newsreader(
+                    fontSize: 48,
+                    fontWeight: FontWeight.w600,
+                    height: 1.25,
+                    letterSpacing: -1.2,
+                    color: const Color(0xFFE2E2E2),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Yorumlarla diğer kullanıcılarla\n'
+                  'tartışabilir, yanıt verebilirsin.\n'
+                  'Uygunsuz içerik için yorumları\n'
+                  'raporlayabilir veya kullanıcıyı\n'
+                  'engelleyebilirsin. Hesap isteğe\n'
+                  'bağlıdır; giriş yaparak verilerini\n'
+                  'bulutta birleştirebilirsin.',
+                  style: GoogleFonts.notoSans(
+                    fontSize: 18,
+                    height: 1.625,
+                    color: const Color(0xFFBFC7D5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
