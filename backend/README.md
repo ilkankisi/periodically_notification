@@ -113,10 +113,10 @@ TOKEN="..." # veya register/login response'tan
 curl -X POST http://localhost:8080/api/storage/upload \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@/path/to/image.jpg"
-# Response: {"url":"http://localhost:9000/motivations/uuid.jpg","size":12345,"name":"image.jpg"}
+# Response: {"url":"http://127.0.0.1/minio/motivations/uuid.jpg",...}  (Docker’da nginx /minio/ vekili; MINIO_PUBLIC_URL buna göre)
 ```
 
-**Not:** Mobil cihazda test ederken `MINIO_PUBLIC_URL` makinenizin IP'si olmalı (örn. `http://192.168.1.10:9000`).
+**Not:** Docker + nginx kullanırken `MINIO_PUBLIC_URL` tabanı `http://<erişilebilir_IP>/minio` olmalı (doğrudan `:9000` mobil operatörlerde sorun çıkarabilir). Yerel `go run` ile doğrudan MinIO’ya bağlanıyorsanız `http://localhost:9000` kullanılabilir.
 
 ## Veri ve görsel araçları (CLI)
 

@@ -5,7 +5,7 @@
 services:
   api:
     volumes:
-      - /Users/consultechs/Desktop/motivation/pushnotificationSeltification/AuthKey_GN4CR3AB3W.p8:/run/secrets/apns.p8:ro
+      - C:\Users\İlkan Kişi\Documents\GitHub\motivations\pushnotificationSeltification/AuthKey_GN4CR3AB3W.p8:/run/secrets/apns.p8:ro
     environment:
       # Konteyner içi yol sabit; host yolunu yukarıdaki volume sol tarafına yazdınız.
       APNS_KEY_PATH: /run/secrets/apns.p8

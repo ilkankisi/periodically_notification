@@ -4,9 +4,8 @@
 # PostgreSQL, RabbitMQ, MinIO + Go API + nginx reverse proxy tek komutla.
 # Dış erişim: nginx 80 → api:8080. Örnek: curl http://<LAN-IP>/api/health
 #
-# WAN / kamu IP: router'da 80 (ve gerekirse 9000 MinIO) port yönlendirmesi + güvenlik duvarı.
-# MINIO_PUBLIC_URL: mobil/curl ile dönen görsel URL'leri için dışarıdan erişilebilir taban
-# (örn. http://EV_IP:9000 veya domain). compose çalıştırmadan önce export edin veya .env'e yazın.
+# WAN: router'da genelde yalnızca 80 yeterli — görseller nginx /minio/ üzerinden (mobil operatörler 9000 çıkışını kesebilir).
+# MINIO_PUBLIC_URL: istemciye dönen görsel tabanı; nginx vekili için http://<host>/minio (port yok).
 
 services:
   # PostgreSQL - ana veritabanı
@@ -55,8 +54,9 @@ services:
     volumes:
       - miniodata:/data
     ports:
-      - "9000:9000"  # S3 API (dış ağdan görsel URL için genelde bu port da açılır)
-      - "9001:9001"  # Web Console: http://localhost:9001
+      # WAN görselleri: nginx 80 → /minio/ (çoğu senaryoda 9000'i internete açmaya gerek yok)
+      - "9000:9000"  # S3 API — doğrudan erişim (LAN, mc, curl); isteğe bağlı
+      - "9001:9001"  # Web Console: http://localhost:9001 — internete açmayın
 
   # Go API — Dockerfile ile build
   # APNs (.p8): host yolunu konteynıra bağlamak için docker-compose.override.example.yml → docker-compose.override.yml kopyalayın ve yolu düzenleyin.
@@ -85,8 +85,8 @@ services:
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: motivationpictures
       MINIO_USE_SSL: "false"
-      # Dış dünyadan erişim: örn. http://123.45.67.89:9000 — host makinede export MINIO_PUBLIC_URL=... veya .env
-      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://127.0.0.1:9000}
+      # Dışarıdan görsel URL tabanı: nginx /minio/ vekili (örn. http://192.168.1.42/minio veya http://WAN_IP/minio)
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://127.0.0.1/minio}
       PORT: "8080"
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
       ADMIN_SECRET: ${ADMIN_SECRET:-}
@@ -117,6 +117,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      minio:
+        condition: service_started
     ports:
       # Makinede 80 doluysa örn. "8080:80" yapıp http://IP:8080 kullanın
       - "80:80"
