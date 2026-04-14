@@ -85,6 +85,19 @@ class _LoginPageState extends State<LoginPage> {
     if (err.contains('sign_in_failed') || err.contains('invalid_credential')) {
       return 'Giriş başarısız. Lütfen tekrar deneyin.';
     }
+    if (err.contains('Geçersiz Google token')) {
+      return 'Google oturumu sunucuda doğrulanamadı. Uygulama güncel mi ve API aynı Google projesini mi kullanıyor kontrol edin.';
+    }
+    if (err.contains('Google OAuth yapılandırılmamış')) {
+      return 'Sunucuda Google girişi yapılandırılmamış.';
+    }
+    if (err.contains('Kullanıcı oluşturulamadı')) {
+      return 'Hesap oluşturulamadı. Lütfen daha sonra tekrar deneyin.';
+    }
+    final stripped = err.replaceFirst(RegExp(r'^Exception:\s*'), '');
+    if (stripped != err && stripped.length < 220) {
+      return stripped;
+    }
     return 'Bir hata oluştu. Lütfen tekrar deneyin.';
   }
 

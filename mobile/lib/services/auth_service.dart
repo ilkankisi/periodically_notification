@@ -142,10 +142,6 @@ class AuthService {
       );
     }
     final data = await BackendService.client.oauthGoogle(idToken: idToken);
-    if (data == null) {
-      await _googleSignIn.signOut();
-      throw Exception('Sunucu girişi başarısız.');
-    }
     final token = data['token'] as String?;
     final user = data['user'] as Map<String, dynamic>?;
     if (token == null || user == null) {

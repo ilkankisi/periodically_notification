@@ -112,14 +112,22 @@ class BackendApiClient {
     return m;
   }
 
-  Future<Map<String, dynamic>?> oauthGoogle({required String idToken}) async {
+  Future<Map<String, dynamic>> oauthGoogle({required String idToken}) async {
     final r = await http.post(
       Uri.parse('$_apiBase/auth/oauth/google'),
       headers: _headers(withAuth: false),
       body: jsonEncode({'idToken': idToken}),
     );
-    if (r.statusCode != 200) return null;
-    return jsonDecode(r.body) as Map<String, dynamic>;
+    if (r.statusCode == 200) {
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    }
+    var msg = 'Sunucu girişi başarısız (${r.statusCode}).';
+    try {
+      final m = jsonDecode(r.body) as Map<String, dynamic>;
+      final err = m['error'] as String?;
+      if (err != null && err.isNotEmpty) msg = err;
+    } catch (_) {}
+    throw Exception(msg);
   }
 
   Future<Map<String, dynamic>?> oauthApple({

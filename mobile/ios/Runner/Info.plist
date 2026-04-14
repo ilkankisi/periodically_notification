@@ -31,14 +31,14 @@
 			<string>Google Sign In</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.596975805185-aqd5ans8g8sdjt27kiok5bg20runlfjo</string>
+				<string>com.googleusercontent.apps.571904521245-2pulfplhun0hen46ppc28vd63g00ngep</string>
 			</array>
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>GIDClientID</key>
-	<string>596975805185-aqd5ans8g8sdjt27kiok5bg20runlfjo.apps.googleusercontent.com</string>
+	<string>571904521245-2pulfplhun0hen46ppc28vd63g00ngep.apps.googleusercontent.com</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>whatsapp</string>

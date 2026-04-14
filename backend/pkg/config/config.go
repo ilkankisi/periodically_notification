@@ -83,7 +83,8 @@ func Load() *Config {
 		APNSTopic:          getEnv("APNS_TOPIC", ""),
 		APNSUseProduction:  getEnvBool("APNS_PRODUCTION", false),
 
-		GoogleOAuthClientIDs: getEnv("GOOGLE_OAUTH_CLIENT_IDS", "596975805185-aqd5ans8g8sdjt27kiok5bg20runlfjo.apps.googleusercontent.com"),
+		// iOS/Android/Web OAuth client ID'leri (virgülle); token `aud` buradakilerden biri olmalı.
+		GoogleOAuthClientIDs: getEnv("GOOGLE_OAUTH_CLIENT_IDS", "571904521245-2pulfplhun0hen46ppc28vd63g00ngep.apps.googleusercontent.com"),
 		AppleClientIDs:       getEnv("APPLE_CLIENT_IDS", "com.siyazilim.periodicallynotification"),
 
 		TrustedProxies: getEnv("TRUSTED_PROXIES", "127.0.0.1,172.16.0.0/12,192.168.0.0/16,10.0.0.0/8"),
