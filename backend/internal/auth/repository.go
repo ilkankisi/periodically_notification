@@ -70,6 +70,36 @@ func (r *Repository) FindByAppleSub(ctx context.Context, sub string) (*User, err
 	return &user, nil
 }
 
+func (r *Repository) findSoftDeletedByAppleSub(ctx context.Context, appleSub string) (*User, error) {
+	var user User
+	err := r.db.GetContext(ctx, &user, `
+		SELECT id::text, firebase_uid, google_sub, apple_sub, email, display_name, photo_url, created_at, updated_at
+		FROM users WHERE apple_sub = $1 AND deleted_at IS NOT NULL`, appleSub)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *Repository) findSoftDeletedByGoogleSub(ctx context.Context, googleSub string) (*User, error) {
+	var user User
+	err := r.db.GetContext(ctx, &user, `
+		SELECT id::text, firebase_uid, google_sub, apple_sub, email, display_name, photo_url, created_at, updated_at
+		FROM users WHERE google_sub = $1 AND deleted_at IS NOT NULL`, googleSub)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// RestoreUser soft-delete'i geri alır (aynı OAuth hesabıyla yeniden giriş).
+func (r *Repository) RestoreUser(ctx context.Context, userID string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE users SET deleted_at = NULL, updated_at = NOW()
+		WHERE id = $1::uuid AND deleted_at IS NOT NULL`, userID)
+	return err
+}
+
 // CreateFromFirebase Firebase ile ilk girişte kullanıcı oluşturur.
 func (r *Repository) CreateFromFirebase(ctx context.Context, firebaseUID, email, displayName, photoURL string) (*User, error) {
 	var user User
@@ -121,6 +151,17 @@ func (r *Repository) UpsertGoogleUser(ctx context.Context, googleSub, email, dis
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
+	du, derr := r.findSoftDeletedByGoogleSub(ctx, googleSub)
+	if derr == nil {
+		if err := r.RestoreUser(ctx, du.ID); err != nil {
+			return nil, err
+		}
+		_ = r.patchProfile(ctx, du.ID, displayName, photoURL)
+		return r.GetByID(ctx, du.ID)
+	}
+	if !errors.Is(derr, sql.ErrNoRows) {
+		return nil, derr
+	}
 	if email != "" {
 		u, err = r.FindByEmail(ctx, email)
 		if err == nil {
@@ -165,6 +206,17 @@ func (r *Repository) UpsertAppleUser(ctx context.Context, appleSub, email, displ
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
+	}
+	du, derr := r.findSoftDeletedByAppleSub(ctx, appleSub)
+	if derr == nil {
+		if err := r.RestoreUser(ctx, du.ID); err != nil {
+			return nil, err
+		}
+		_ = r.patchProfile(ctx, du.ID, displayName, "")
+		return r.GetByID(ctx, du.ID)
+	}
+	if !errors.Is(derr, sql.ErrNoRows) {
+		return nil, derr
 	}
 	if email != "" {
 		u, err = r.FindByEmail(ctx, email)
