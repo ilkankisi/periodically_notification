@@ -11,6 +11,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
+	"time"
 
 	"periodically/backend/internal/actions"
 	"periodically/backend/internal/auth"
@@ -136,6 +138,33 @@ func main() {
 	// 6. Route'ları kur
 	server.Setup(r, contentRepo, authRepo, actionsRepo, gamificationRepo, appNotifsRepo, storageHandler, pg.DB, cfg.JWTSecret,
 		config.SplitComma(cfg.GoogleOAuthClientIDs), config.SplitComma(cfg.AppleClientIDs), apnsHandler, dailySend)
+
+	if s := strings.TrimSpace(cfg.DailySendBroadcastInterval); s != "" {
+		if apnsSender == nil {
+			log.Printf("DAILY_SEND_BROADCAST_INTERVAL=%s yok sayıldı (APNS yapılandırılmadı)", s)
+		} else {
+			d, err := time.ParseDuration(s)
+			if err != nil {
+				log.Printf("DAILY_SEND_BROADCAST_INTERVAL geçersiz (%s): %v", s, err)
+			} else {
+				log.Printf("APNs yayın testi aktif: her %v (daily_state değişmez). Kapatmak için env kaldırın.", d)
+				go func() {
+					ticker := time.NewTicker(d)
+					defer ticker.Stop()
+					for range ticker.C {
+						ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+						res, err := dailySend.RunBroadcastPing(ctx)
+						cancel()
+						if err != nil {
+							log.Printf("dailysend broadcast: %v", err)
+							continue
+						}
+						log.Printf("dailysend broadcast: %+v", res)
+					}
+				}()
+			}
+		}
+	}
 
 	// 7. Sunucuyu başlat
 	addr := fmt.Sprintf(":%d", cfg.Port)

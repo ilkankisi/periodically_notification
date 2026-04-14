@@ -61,8 +61,7 @@ class LocalNotificationService {
     await _ensureTz();
 
     final now = tz.TZDateTime.now(tz.local);
-    //final scheduled = now.add(const Duration(days: 1));
-    final scheduled = now.add(const Duration(minutes: 1)); // TEST için
+    final scheduled = now.add(const Duration(days: 1));
     final id = now.millisecondsSinceEpoch.abs() % 2147483647;
 
     final title = 'Dünkü sözünü hatırlıyor musun?';

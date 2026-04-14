@@ -1,6 +1,7 @@
 package dailysend
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -73,4 +74,39 @@ func (h *Handler) PostAdminDailySend(c *gin.Context) {
 		resp["apnsWarning"] = err.Error()
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// RunBroadcastPing kayıtlı içeriği tekrar gönderir; daily_state ve sıra ilerlemez (APNs testi).
+func (h *Handler) RunBroadcastPing(ctx context.Context) (map[string]interface{}, error) {
+	if h.Repo == nil {
+		return nil, errors.New("repo yok")
+	}
+	if h.APNS == nil || h.PushRepo == nil {
+		return map[string]interface{}{"apnsSkipped": true, "broadcastOnly": true}, nil
+	}
+	item, err := h.Repo.GetLastSentOrFirstItem(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tokens, err := h.PushRepo.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(tokens) == 0 {
+		return map[string]interface{}{
+			"success": true, "itemId": item.ID, "apnsSkipped": true, "broadcastOnly": true,
+		}, nil
+	}
+	sent, err := h.APNS.SendDailyToDevices(ctx, item, tokens)
+	out := map[string]interface{}{
+		"success": true, "itemId": item.ID, "order": item.Order,
+		"apnsSent": sent, "apnsTargets": len(tokens), "broadcastOnly": true,
+	}
+	if err != nil && sent == 0 {
+		return out, err
+	}
+	if err != nil {
+		out["apnsWarning"] = err.Error()
+	}
+	return out, nil
 }

@@ -11,6 +11,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -47,6 +48,37 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*DailyItem, error)
 	err := r.db.GetContext(ctx, &item, query, id)
 	if err != nil {
 		// sql.ErrNoRows = bulunamadı
+		return nil, err
+	}
+	return &item, nil
+}
+
+// GetLastSentOrFirstItem son gönderilen günlük içeriği döner; hiç gönderim yoksa en küçük order'lı kayıt.
+// daily_state veya sıra güncellenmez (yalnızca APNs test yayını için).
+func (r *Repository) GetLastSentOrFirstItem(ctx context.Context) (*DailyItem, error) {
+	var lastID sql.NullString
+	err := r.db.GetContext(ctx, &lastID, `SELECT last_sent_item_id FROM daily_state WHERE id = 1`)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrDailyStateMissing
+	}
+	if err != nil {
+		return nil, err
+	}
+	if lastID.Valid && strings.TrimSpace(lastID.String) != "" {
+		item, err := r.GetByID(ctx, lastID.String)
+		if err == nil {
+			return item, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+	var item DailyItem
+	err = r.db.GetContext(ctx, &item, `SELECT `+dailySelectCols+` FROM daily_items ORDER BY "order" ASC LIMIT 1`)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrDailyItemsEmpty
+	}
+	if err != nil {
 		return nil, err
 	}
 	return &item, nil

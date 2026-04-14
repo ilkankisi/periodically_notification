@@ -35,6 +35,9 @@ type Config struct {
 	FirebaseAuthCredentialsPath string // Service account JSON yolu — sadece Auth için (FIREBASE_AUTH_CREDENTIALS_PATH)
 	AdminSecret string // POST /api/admin/daily-send — X-Admin-Secret
 
+	// DAILY_SEND_BROADCAST_INTERVAL — boş: kapalı. Örn. "5m" = sunucu APNs test yayını (daily_state ilerlemez). Prod'da boş bırakın; gerçek günlük için cron + POST /api/admin/daily-send.
+	DailySendBroadcastInterval string
+
 	// APNs (iOS doğrudan push; .p8 Apple Developer)
 	APNSKeyPath      string // APNS_KEY_PATH — AuthKey_xxx.p8 dosya yolu
 	APNSKeyID        string // APNS_KEY_ID
@@ -75,7 +78,8 @@ func Load() *Config {
 		Port:              getEnvInt("PORT", 8080),
 		FirebaseProjectID:           getEnv("FIREBASE_PROJECT_ID", ""),
 		FirebaseAuthCredentialsPath: getEnv("FIREBASE_AUTH_CREDENTIALS_PATH", ""),
-		AdminSecret: getEnv("ADMIN_SECRET", ""),
+		AdminSecret:                getEnv("ADMIN_SECRET", ""),
+		DailySendBroadcastInterval: getEnv("DAILY_SEND_BROADCAST_INTERVAL", ""),
 
 		APNSKeyPath:        getEnv("APNS_KEY_PATH", ""),
 		APNSKeyID:          getEnv("APNS_KEY_ID", ""),
