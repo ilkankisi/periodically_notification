@@ -58,22 +58,50 @@ class BackendApiClient {
 
   /// APNs cihaz jetonunu Go `POST /api/push/apns-token` ile kaydeder.
   Future<bool> registerApnsDeviceToken(String deviceTokenHex) async {
-    final r = await http.post(
-      Uri.parse('$_apiBase/push/apns-token'),
-      headers: _headers(withAuth: false),
-      body: jsonEncode({'deviceToken': deviceTokenHex}),
-    );
-    return r.statusCode == 204 || r.statusCode == 200;
+    final uri = Uri.parse('$_apiBase/push/apns-token');
+    try {
+      final r = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({'deviceToken': deviceTokenHex}),
+          )
+          .timeout(_httpTimeout);
+      final ok = r.statusCode == 204 || r.statusCode == 200;
+      if (kDebugMode && !ok) {
+        debugPrint('[API] POST $uri → ${r.statusCode} ${r.body}');
+      }
+      return ok;
+    } on Object catch (e) {
+      if (kDebugMode) {
+        debugPrint('[API] apns-token misafir hata: $e (API_BASE_URL=$baseUrl)');
+      }
+      return false;
+    }
   }
 
   /// JWT ile APNs jetonunu kullanıcıya bağlar (`POST /api/v1/push/apns-token`).
   Future<bool> registerApnsDeviceTokenForAuthUser(String deviceTokenHex) async {
-    final r = await http.post(
-      Uri.parse('$_apiBase/v1/push/apns-token'),
-      headers: _headers(),
-      body: jsonEncode({'deviceToken': deviceTokenHex}),
-    );
-    return r.statusCode == 204 || r.statusCode == 200;
+    final uri = Uri.parse('$_apiBase/v1/push/apns-token');
+    try {
+      final r = await http
+          .post(
+            uri,
+            headers: _headers(),
+            body: jsonEncode({'deviceToken': deviceTokenHex}),
+          )
+          .timeout(_httpTimeout);
+      final ok = r.statusCode == 204 || r.statusCode == 200;
+      if (kDebugMode && !ok) {
+        debugPrint('[API] POST $uri → ${r.statusCode} ${r.body}');
+      }
+      return ok;
+    } on Object catch (e) {
+      if (kDebugMode) {
+        debugPrint('[API] apns-token kullanıcı hata: $e (API_BASE_URL=$baseUrl)');
+      }
+      return false;
+    }
   }
 
   /// Çıkışta bu cihaz jetonundan kullanıcı bağını kaldırır.
