@@ -22,7 +22,7 @@ import (
 	"periodically/backend/internal/gamification"
 	"periodically/backend/internal/push"
 	"periodically/backend/internal/server"
-	"periodicall   y/backend/internal/storage"
+	"periodically/backend/internal/storage"
 	"periodically/backend/pkg/config"
 	"periodically/backend/pkg/firebase"
 	"periodically/backend/pkg/migrate"
