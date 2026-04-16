@@ -17,6 +17,10 @@ import 'content_detail_page.dart';
 import 'notifications_page.dart';
 import 'zincir_page.dart';
 import '../widgets/add_action_card.dart';
+import '../widgets/first_main_card_coach.dart';
+import '../widgets/first_mission_coach.dart';
+import '../services/onboarding_service.dart';
+import 'badges_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -34,11 +38,34 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  /// Coach hedefleri için ana düzeni yükleme bitmeden göstermek (tutorial önce).
+  static const String _coachShellPlaceholderId = '_coach_shell_placeholder';
+  static final Motivation _kCoachShellPlaceholder = Motivation(
+    id: _coachShellPlaceholderId,
+    title: 'İçerik yükleniyor…',
+    body: '',
+  );
+
   List<Motivation> items = [];
   bool loading = true;
   bool _hasDeliveredContent = true; // Bildirimle gelen içerik var mı?
+  /// null: SharedPreferences okunmadı; true/false: ilk görev coach gösterilecek mi.
+  bool? _firstMissionCoachWanted;
+
+  /// Onboarding v1 zincir fazı ([OnboardingService.getOnboardingV1Phase]); null = henüz senkronize edilmedi.
+  int? _v1Phase;
 
   StreamSubscription<void>? _contentUpdateSub;
+
+  final GlobalKey _coachActionKey = GlobalKey();
+  final GlobalKey _coachZincirKey = GlobalKey();
+  final GlobalKey _coachMainCardKey = GlobalKey();
+  bool _firstMissionCoachScheduled = false;
+  bool _mainCardCoachScheduled = false;
+
+  /// İlk görev coach için hedef widget’lar yüklü ana sayfa iskeleti (içerik henüz yok, arka planda [_load]).
+  bool get _coachTargetShellActive =>
+      _firstMissionCoachWanted == true && loading && items.isEmpty;
 
   Widget _homeImagePlaceholder(double height) {
     return Container(
@@ -51,18 +78,48 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  void _onDebugFirstMissionCoachCycleDone() {
+    if (!mounted) return;
+    setState(() => _firstMissionCoachScheduled = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_tryScheduleFirstMissionCoach());
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (OnboardingService.kDebugRepeatFirstMissionCoach) {
+      OnboardingService.setDebugFirstMissionCoachCycleListener(_onDebugFirstMissionCoachCycleDone);
+    }
+    unawaited(_syncOnboardingStateForBuild());
     _load();
     _contentUpdateSub = PushNotificationService.onContentUpdated.stream.listen((_) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     });
   }
 
+  Future<void> _syncOnboardingStateForBuild() async {
+    final wanted = await OnboardingService.shouldShowFirstMissionCoach();
+    final phase = await OnboardingService.getOnboardingV1Phase();
+    if (!mounted) return;
+    setState(() {
+      _firstMissionCoachWanted = wanted;
+      _v1Phase = phase;
+    });
+    if (wanted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_tryScheduleFirstMissionCoach());
+      });
+    }
+  }
+
   @override
   void dispose() {
+    if (OnboardingService.kDebugRepeatFirstMissionCoach) {
+      OnboardingService.setDebugFirstMissionCoachCycleListener(null);
+    }
     _contentUpdateSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -96,6 +153,125 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     // Widget'ı güncelle - FCM arka planda geldiyse resim burada indirilir
     PushNotificationService.refreshWidgetFromCache();
+    await _syncOnboardingStateForBuild();
+    if (mounted && items.isNotEmpty) {
+      _tryScheduleFirstMissionCoach();
+      unawaited(_tryScheduleMainCardCoach());
+    }
+  }
+
+  Future<void> _tryScheduleMainCardCoach() async {
+    if (_mainCardCoachScheduled) return;
+    if (!mounted) return;
+    if (items.isEmpty && !_coachTargetShellActive) return;
+    final phase = await OnboardingService.getOnboardingV1Phase();
+    if (phase != OnboardingService.v1NeedMainCardCoach) return;
+    if (!mounted) return;
+    if (items.isEmpty && !_coachTargetShellActive) return;
+    _mainCardCoachScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final homeContext = context;
+      if (!homeContext.mounted) return;
+      await Future<void>.delayed(const Duration(milliseconds: 360));
+      if (!homeContext.mounted) return;
+      final cardCtx = _coachMainCardKey.currentContext;
+      if (cardCtx != null) {
+        await Scrollable.ensureVisible(
+          cardCtx,
+          duration: const Duration(milliseconds: 420),
+          curve: Curves.easeOutCubic,
+          alignment: 0.15,
+        );
+        if (!homeContext.mounted) return;
+      }
+      FirstMainCardCoach.show(
+        context: homeContext,
+        mainCardKey: _coachMainCardKey,
+      );
+    });
+  }
+
+  /// Değer önerisi tamamlandıktan sonra bir kez: aksiyon + zincir.
+  Future<void> _tryScheduleFirstMissionCoach() async {
+    if (_firstMissionCoachScheduled) return;
+    if (!mounted) return;
+    if (items.isEmpty && !_coachTargetShellActive) return;
+    if (!await OnboardingService.shouldShowFirstMissionCoach()) return;
+    if (!mounted) return;
+    // [await] sırasında yükleme bitip içerik boş kaldıysa coach hedefleri kaybolur — tekrar kontrol et.
+    if (items.isEmpty && !_coachTargetShellActive) return;
+    _firstMissionCoachScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final homeContext = context;
+      if (!homeContext.mounted) return;
+      await Future<void>.delayed(const Duration(milliseconds: 360));
+      if (!homeContext.mounted) return;
+      final actionCtx = _coachActionKey.currentContext;
+      if (actionCtx != null) {
+        await Scrollable.ensureVisible(
+          actionCtx,
+          duration: const Duration(milliseconds: 420),
+          curve: Curves.easeOutCubic,
+          alignment: 0.35,
+        );
+        if (!homeContext.mounted) return;
+      }
+      FirstMissionCoach.show(
+        context: homeContext,
+        actionKey: _coachActionKey,
+        zincirKey: _coachZincirKey,
+      );
+    });
+  }
+
+  Future<void> _onDailyActionSavedChain() async {
+    final phaseBefore = await OnboardingService.getOnboardingV1Phase();
+    if (phaseBefore == OnboardingService.v1NeedDailyAction) {
+      await OnboardingService.setOnboardingV1Phase(OnboardingService.v1NeedMainCardCoach);
+    }
+    await _load();
+  }
+
+  Future<void> _pushContentDetailV1Aware(Motivation item, {required bool isMainHero}) async {
+    var phase = await OnboardingService.getOnboardingV1Phase();
+    var openComposerCoach = false;
+    if (isMainHero && phase == OnboardingService.v1NeedMainCardCoach) {
+      await OnboardingService.setOnboardingV1Phase(OnboardingService.v1NeedComposerCoach);
+      if (mounted) setState(() => _v1Phase = OnboardingService.v1NeedComposerCoach);
+      openComposerCoach = true;
+    } else if (phase == OnboardingService.v1NeedComposerCoach) {
+      openComposerCoach = true;
+    }
+    if (!mounted) return;
+    final r = await Navigator.push<String?>(
+      context,
+      MaterialPageRoute<String?>(
+        builder: (context) => ContentDetailPage(
+          item: item,
+          onboardingV1ComposerCoach: openComposerCoach,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await _syncOnboardingStateForBuild();
+    if (r == 'onboarding_badges') {
+      await _openOnboardingBadgesAfterCommentChain();
+    }
+  }
+
+  Future<void> _openOnboardingBadgesAfterCommentChain() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => const BadgesPage(firstLaunchPreview: true),
+      ),
+    );
+    if (!mounted) return;
+    widget.onTabTap?.call(3);
+    await OnboardingService.markV1BadgesPreviewCompleted();
+    await _syncOnboardingStateForBuild();
   }
 
   /// Bildirimle gelen içerik mi yoksa öneri mi? (öneri = delivered boşken gösterilen)
@@ -581,9 +757,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final latest = items.isNotEmpty ? items.first : null;
+    final latest = items.isNotEmpty ? items.first : _kCoachShellPlaceholder;
+    final isShellPlaceholder = items.isEmpty;
     final hasPreviousDays = items.length > 1;
-    final showEmptyLayout = loading || items.isEmpty;
+    final showEmptyLayout = (loading || items.isEmpty) && !_coachTargetShellActive;
 
     if (showEmptyLayout) {
       return Scaffold(
@@ -619,11 +796,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildMainCard(latest!, isSuggested: _isSuggestedContent),
+                      _buildMainCard(latest, isSuggested: _isSuggestedContent, isShellPlaceholder: isShellPlaceholder),
                       const SizedBox(height: 16),
-                      _buildZincirPillButton(),
+                      _buildZincirPillButton(key: _coachZincirKey),
                       const SizedBox(height: 28),
-                      _buildHabitSection(items.first),
+                      _buildHabitSection(latest, lockActionCard: isShellPlaceholder),
                       if (hasPreviousDays) ...[
                         const SizedBox(height: 32),
                         Row(
@@ -692,12 +869,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             itemBuilder: (context, index) {
                               final item = items[index + 1];
                               return GestureDetector(
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ContentDetailPage(item: item),
-                                  ),
-                                ),
+                                onTap: () => unawaited(_pushContentDetailV1Aware(item, isMainHero: false)),
                                 child: _smallCard(item),
                               );
                             },
@@ -717,8 +889,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// Figma 60-404: koyu pill, hero kartının hemen altında.
-  Widget _buildZincirPillButton() {
+  Widget _buildZincirPillButton({Key? key}) {
     return SizedBox(
+      key: key,
       width: double.infinity,
       child: Material(
         color: const Color(0xFF1A1A1A),
@@ -750,8 +923,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// Ana değer önerisi — Figma 60-404 (mavi daire check + kompakt aksiyon kartı).
-  Widget _buildHabitSection(Motivation latest) {
-    return Column(
+  Widget _buildHabitSection(Motivation latest, {bool lockActionCard = false}) {
+    final actionBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
@@ -798,68 +971,88 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
         ),
         const SizedBox(height: 18),
-        AddActionCard(
-          quoteId: latest.id,
-          quoteTitle: latest.title,
-          onActionSaved: _load,
-          titleText: 'BUGÜN BU SÖZLE NE YAPTIN?',
-          hintText: 'Düşüncelerini ve eylemlerini buraya not et...',
-          showDescription: false,
+        Container(
+          key: _coachActionKey,
+          child: AddActionCard(
+            quoteId: latest.id,
+            quoteTitle: latest.title,
+            onActionSaved: () => unawaited(_onDailyActionSavedChain()),
+            titleText: 'BUGÜN BU SÖZLE NE YAPTIN?',
+            hintText: 'Düşüncelerini ve eylemlerini buraya not et...',
+            showDescription: false,
+          ),
         ),
       ],
     );
+    if (lockActionCard) {
+      return AbsorbPointer(child: actionBlock);
+    }
+    return actionBlock;
   }
 
   /// Figma 60-404: tam genişlik hero, görsel üzerinde rozet + italik başlık.
   static const double _homeHeroImageHeight = 300;
 
-  Widget _buildMainCard(Motivation latest, {bool isSuggested = false}) {
+  Widget _buildMainCard(Motivation latest, {bool isSuggested = false, bool isShellPlaceholder = false}) {
     final badge = isSuggested ? 'BUGÜNÜN ÖNERİSİ' : 'GÜNÜN İLHAMI';
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ContentDetailPage(item: latest),
+    final shell = isShellPlaceholder || latest.id == _coachShellPlaceholderId;
+
+    final Widget heroImage;
+    if (shell) {
+      heroImage = Container(
+        color: const Color(0xFF27272A),
+        alignment: Alignment.center,
+        child: const SizedBox(
+          width: 36,
+          height: 36,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            color: Color(0xFFA1C9FF),
+          ),
         ),
-      ),
-      child: Container(
+      );
+    } else if (latest.imageBase64 != null) {
+      heroImage = Image.memory(
+        base64Decode(latest.imageBase64!),
+        fit: BoxFit.cover,
         width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x50000000),
-              blurRadius: 32,
-              offset: Offset(0, 16),
-              spreadRadius: -8,
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          fit: StackFit.loose,
-          children: [
-            SizedBox(
-              height: _homeHeroImageHeight,
-              width: double.infinity,
-              child: latest.imageBase64 != null
-                  ? Image.memory(
-                      base64Decode(latest.imageBase64!),
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: _homeHeroImageHeight,
-                    )
-                  : (latest.displayImageUrl != null && latest.displayImageUrl!.isNotEmpty
-                      ? MotivationCachedImage(
-                          imageUrl: latest.displayImageUrl!,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: _homeHeroImageHeight,
-                          placeholder: (c, u) => Container(color: const Color(0xFF27272A)),
-                          error: (c, u, e) => _homeImagePlaceholder(_homeHeroImageHeight),
-                        )
-                      : _homeImagePlaceholder(_homeHeroImageHeight)),
-            ),
+        height: _homeHeroImageHeight,
+      );
+    } else if (latest.displayImageUrl != null && latest.displayImageUrl!.isNotEmpty) {
+      heroImage = MotivationCachedImage(
+        imageUrl: latest.displayImageUrl!,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: _homeHeroImageHeight,
+        placeholder: (c, u) => Container(color: const Color(0xFF27272A)),
+        error: (c, u, e) => _homeImagePlaceholder(_homeHeroImageHeight),
+      );
+    } else {
+      heroImage = _homeImagePlaceholder(_homeHeroImageHeight);
+    }
+
+    final cardBody = Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x50000000),
+            blurRadius: 32,
+            offset: Offset(0, 16),
+            spreadRadius: -8,
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.loose,
+        children: [
+          SizedBox(
+            height: _homeHeroImageHeight,
+            width: double.infinity,
+            child: heroImage,
+          ),
             Positioned(
               top: 0,
               left: 0,
@@ -951,7 +1144,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ],
         ),
-      ),
+      );
+
+    if (shell) {
+      return AbsorbPointer(child: cardBody);
+    }
+    final attachMainCoachKey = _v1Phase == OnboardingService.v1NeedMainCardCoach;
+    return GestureDetector(
+      key: attachMainCoachKey ? _coachMainCardKey : null,
+      onTap: () => unawaited(_pushContentDetailV1Aware(latest, isMainHero: true)),
+      child: cardBody,
     );
   }
 

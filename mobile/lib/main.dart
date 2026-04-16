@@ -193,11 +193,17 @@ class _MainShellState extends State<_MainShell> {
   @override
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.sizeOf(context).width >= 600;
-    final navBar = BottomNavBar(activeIndex: _currentIndex, onTabTap: _onTabTap);
+    final navBar = BottomNavBar(
+      activeIndex: _currentIndex,
+      onTabTap: _onTabTap,
+    );
     final body = IndexedStack(
       index: _currentIndex,
       children: [
-        HomePage(showBottomBar: false, onTabTap: _onTabTap),
+        HomePage(
+          showBottomBar: false,
+          onTabTap: _onTabTap,
+        ),
         ExplorePage(showBottomBar: false, onTabTap: _onTabTap),
         SavedPage(showBottomBar: false, onTabTap: _onTabTap),
         ProfilePage(showBottomBar: false, onTabTap: _onTabTap),

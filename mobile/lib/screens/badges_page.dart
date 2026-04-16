@@ -1,15 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 import '../models/gamification_badge.dart';
 import '../services/auth_service.dart';
 import '../services/gamification_service.dart';
 import '../widgets/app_top_bar.dart';
+import '../widgets/first_badges_back_coach.dart';
 import 'login_page.dart';
 
 /// Rozetler ve sosyal puan — Figma 60-1499.
+/// [firstLaunchPreview]: ilk görev turu sonrası misafir için örnek veri (giriş duvarı yok).
 class BadgesPage extends StatefulWidget {
-  const BadgesPage({super.key});
+  const BadgesPage({super.key, this.firstLaunchPreview = false});
+
+  final bool firstLaunchPreview;
 
   @override
   State<BadgesPage> createState() => _BadgesPageState();
@@ -18,6 +25,23 @@ class BadgesPage extends StatefulWidget {
 class _BadgesPageState extends State<BadgesPage> {
   Future<_BadgeViewModel>? _future;
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _backCoachKey = GlobalKey();
+  /// Geri spotlight bir kez gösterildi.
+  bool _badgesBackCoachScheduled = false;
+  /// Scroll + yedek zamanlayıcı bir kez kuruldu (ilk başarılı liste frame’i).
+  bool _firstLaunchBackCoachGateDone = false;
+  /// Geri spotlight için en az bu kadar süre sayfa görünür kalsın (scroll sayılmasından önce).
+  bool _backCoachMinViewElapsed = false;
+  Timer? _backCoachMinViewTimer;
+  Timer? _backCoachFallbackTimer;
+  TutorialCoachMark? _badgesBackCoach;
+
+  /// Kaydırma ile tetiklemek için toplam ofset (küçük kaydırmalar tek seferde spotlight açmasın).
+  static const double _kBackCoachScrollThresholdPx = 140;
+  /// Scroll ile coach’tan önce kullanıcının listeyi görmesi için bekleme.
+  static const Duration _kBackCoachMinViewBeforeScrollCoach = Duration(milliseconds: 2200);
+  /// Kaydırmazsa veya liste kısaysa en geç bu süre sonra geri spotlight.
+  static const Duration _kBackCoachFallbackDelay = Duration(seconds: 6);
 
   static const Color _bg = Color(0xFF000000);
   static const Color _accent = Color(0xFF0095FF);
@@ -28,18 +52,89 @@ class _BadgesPageState extends State<BadgesPage> {
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    _future = widget.firstLaunchPreview && !AuthService.isLoggedIn
+        ? Future.value(_guestPreviewViewModelForFirstLaunch())
+        : _load();
     GamificationService.onStateChanged.addListener(_onGamificationChanged);
+  }
+
+  /// İlk tur önizlemesi — gerçek API yok; örnek puan ve birkaç açık rozet.
+  static _BadgeViewModel _guestPreviewViewModelForFirstLaunch() {
+    return _BadgeViewModel(
+      points: 320,
+      unlocked: {
+        'social_first',
+        'social_10',
+        'social_thread',
+      },
+    );
   }
 
   @override
   void dispose() {
+    _teardownBackCoachGate();
+    _badgesBackCoach?.removeOverlayEntry();
     GamificationService.onStateChanged.removeListener(_onGamificationChanged);
     _scrollController.dispose();
     super.dispose();
   }
 
+  void _teardownBackCoachGate() {
+    _backCoachMinViewTimer?.cancel();
+    _backCoachMinViewTimer = null;
+    _backCoachFallbackTimer?.cancel();
+    _backCoachFallbackTimer = null;
+    _scrollController.removeListener(_onScrollForFirstLaunchBackCoach);
+  }
+
+  void _onScrollForFirstLaunchBackCoach() {
+    if (_badgesBackCoachScheduled || !mounted) return;
+    if (!_backCoachMinViewElapsed) return;
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.offset >= _kBackCoachScrollThresholdPx) {
+      _teardownBackCoachGate();
+      _scheduleFirstLaunchBackCoachIfNeeded();
+    }
+  }
+
+  /// Min. görünürlük süresi doldu; zaten yeterince kaydırıldıysa hemen coach göster.
+  void _onBackCoachMinViewElapsed() {
+    if (_badgesBackCoachScheduled || !mounted) return;
+    _backCoachMinViewElapsed = true;
+    if (_scrollController.hasClients &&
+        _scrollController.offset >= _kBackCoachScrollThresholdPx) {
+      _teardownBackCoachGate();
+      _scheduleFirstLaunchBackCoachIfNeeded();
+    }
+  }
+
+  void _startFirstLaunchBackCoachGate() {
+    if (!mounted || !widget.firstLaunchPreview || _badgesBackCoachScheduled) return;
+    _backCoachMinViewElapsed = false;
+    _scrollController.addListener(_onScrollForFirstLaunchBackCoach);
+    _backCoachMinViewTimer?.cancel();
+    _backCoachMinViewTimer = Timer(_kBackCoachMinViewBeforeScrollCoach, _onBackCoachMinViewElapsed);
+    _backCoachFallbackTimer?.cancel();
+    _backCoachFallbackTimer = Timer(_kBackCoachFallbackDelay, () {
+      if (!mounted || _badgesBackCoachScheduled) return;
+      _backCoachMinViewElapsed = true;
+      _teardownBackCoachGate();
+      _scheduleFirstLaunchBackCoachIfNeeded();
+    });
+  }
+
+  void _scheduleFirstLaunchBackCoachIfNeeded() {
+    if (!mounted || !widget.firstLaunchPreview || _badgesBackCoachScheduled) return;
+    _badgesBackCoachScheduled = true;
+    _teardownBackCoachGate();
+    _badgesBackCoach = FirstBadgesBackCoach.show(
+      context: context,
+      backButtonKey: _backCoachKey,
+    );
+  }
+
   void _onGamificationChanged() {
+    if (widget.firstLaunchPreview && !AuthService.isLoggedIn) return;
     if (mounted) setState(() => _future = _load());
   }
 
@@ -56,6 +151,12 @@ class _BadgesPageState extends State<BadgesPage> {
   }
 
   Future<void> _onRefresh() async {
+    if (widget.firstLaunchPreview && !AuthService.isLoggedIn) {
+      final f = Future.value(_guestPreviewViewModelForFirstLaunch());
+      setState(() => _future = f);
+      await f;
+      return;
+    }
     final f = _load();
     setState(() => _future = f);
     await f;
@@ -78,13 +179,14 @@ class _BadgesPageState extends State<BadgesPage> {
     return 'Başlangıç';
   }
 
-  PreferredSizeWidget _buildAppBar(int points) {
+  PreferredSizeWidget _buildAppBar(int points, {bool useBackCoachKey = false}) {
     return AppBar(
       backgroundColor: _bg,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       centerTitle: true,
       leading: IconButton(
+        key: useBackCoachKey ? _backCoachKey : null,
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
         onPressed: () => Navigator.maybePop(context),
       ),
@@ -110,9 +212,38 @@ class _BadgesPageState extends State<BadgesPage> {
     );
   }
 
+  Widget _buildFirstLaunchPreviewBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: _accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _accent.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.visibility_outlined, color: _accent, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Örnek görünüm — giriş yapınca gerçek puan ve rozetlerin burada görünür.',
+              style: GoogleFonts.notoSans(
+                fontSize: 13,
+                height: 1.4,
+                color: const Color(0xFFE5E5EA),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (!AuthService.isLoggedIn) {
+    if (!AuthService.isLoggedIn && !widget.firstLaunchPreview) {
       return Scaffold(
         backgroundColor: _bg,
         appBar: _buildAppBar(0),
@@ -137,9 +268,19 @@ class _BadgesPageState extends State<BadgesPage> {
         final total = GamificationBadgeDef.catalog.length;
         final progress = total > 0 ? earned / total : 0.0;
 
+        if (widget.firstLaunchPreview &&
+            !_firstLaunchBackCoachGateDone &&
+            !_badgesBackCoachScheduled) {
+          _firstLaunchBackCoachGateDone = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _startFirstLaunchBackCoachGate();
+          });
+        }
+
         return Scaffold(
           backgroundColor: _bg,
-          appBar: _buildAppBar(vm.points),
+          appBar: _buildAppBar(vm.points, useBackCoachKey: widget.firstLaunchPreview),
           body: RefreshIndicator(
             onRefresh: _onRefresh,
             color: _accent,
@@ -149,6 +290,10 @@ class _BadgesPageState extends State<BadgesPage> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 40),
               children: [
+                if (widget.firstLaunchPreview && !AuthService.isLoggedIn) ...[
+                  _buildFirstLaunchPreviewBanner(),
+                  const SizedBox(height: 20),
+                ],
                 _buildPointsHero(
                   points: vm.points,
                   earned: earned,
