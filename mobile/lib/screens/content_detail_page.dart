@@ -13,10 +13,13 @@ import '../services/auth_service.dart';
 import '../services/backend_service.dart';
 import '../models/gamification_badge.dart';
 import '../services/comment_service.dart';
+import '../services/onboarding_service.dart';
 import '../services/moderation_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/user_motivation_service.dart';
 import '../widgets/add_action_card.dart';
+import '../widgets/comment_points_coach.dart';
+import '../widgets/first_comment_composer_coach.dart';
 import '../widgets/motivation_cached_image.dart';
 import 'login_page.dart';
 
@@ -24,7 +27,18 @@ import 'login_page.dart';
 class ContentDetailPage extends StatefulWidget {
   final Motivation item;
 
-  const ContentDetailPage({super.key, required this.item});
+  /// Onboarding v1: ana sayfadaki günün içeriği kartından açıldıysa yorum alanı coach’u.
+  final bool onboardingV1ComposerCoach;
+
+  /// Full tur v2: Kaydedilenler’den açıldıysa yorum coach’u (faz [OnboardingService.ftSavedComment]).
+  final bool onboardingFullTourSavedFlow;
+
+  const ContentDetailPage({
+    super.key,
+    required this.item,
+    this.onboardingV1ComposerCoach = false,
+    this.onboardingFullTourSavedFlow = false,
+  });
 
   @override
   State<ContentDetailPage> createState() => _ContentDetailPageState();
@@ -41,6 +55,12 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   String? _reactingCommentId;
   bool _commentsNewestFirst = true;
 
+  final GlobalKey _commentPointsSpotlightKey = GlobalKey();
+  final GlobalKey _onboardingComposerAreaKey = GlobalKey();
+  bool _commentPointsSpotlightVisible = false;
+  int _spotlightEarnedPoints = 0;
+  List<String> _spotlightNewBadgeIds = const [];
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +69,29 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     _commentsSub = CommentService.streamComments(widget.item.id).listen((list) {
       if (mounted) setState(() => _comments = list);
     });
+    if (widget.onboardingV1ComposerCoach && AuthService.isLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 420));
+        if (!mounted) return;
+        FirstCommentComposerCoach.show(
+          context: context,
+          composerAreaKey: _onboardingComposerAreaKey,
+          onFlowFinished: () async {
+            await OnboardingService.setOnboardingV1Phase(OnboardingService.v1NeedFirstComment);
+          },
+        );
+      });
+    } else if (widget.onboardingFullTourSavedFlow && AuthService.isLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 420));
+        if (!mounted) return;
+        FirstCommentComposerCoach.show(
+          context: context,
+          composerAreaKey: _onboardingComposerAreaKey,
+          onFlowFinished: () async {},
+        );
+      });
+    }
   }
 
   Future<void> _loadMyAction() async {
@@ -125,6 +168,28 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     return depth;
   }
 
+  Future<void> _popFullTourBadgesIfNeeded() async {
+    final ftp = await OnboardingService.getFullTourPhase();
+    if (ftp != OnboardingService.ftSavedComment) return;
+    if (!mounted) return;
+    await OnboardingService.setFullTourPhase(OnboardingService.ftBadgesAfterTourComment);
+    if (!mounted) return;
+    Navigator.of(context).pop<String>('full_tour_badges');
+  }
+
+  Future<void> _finishV1CommentPointsCoachAndReturnHome() async {
+    final ftp = await OnboardingService.getFullTourPhase();
+    if (ftp == OnboardingService.ftSavedComment) {
+      await OnboardingService.setFullTourPhase(OnboardingService.ftBadgesAfterTourComment);
+      if (!mounted) return;
+      Navigator.of(context).pop<String>('full_tour_badges');
+      return;
+    }
+    await OnboardingService.markCommentPointsSpotlightCompleted();
+    if (!mounted) return;
+    Navigator.of(context).pop<String>('onboarding_badges');
+  }
+
   Future<void> _postComment() async {
     final text = _commentController.text.trim();
     if (text.isEmpty || _sendingComment) return;
@@ -150,23 +215,60 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         setState(() => _replyTo = null);
         final newBadges = posted.newBadgeIds;
         final pts = posted.pointsAwarded;
-        if (newBadges.isNotEmpty) {
-          final labels = newBadges
-              .map((id) => GamificationBadgeDef.byId(id)?.title ?? id)
-              .join(', ');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('+$pts puan! Yeni rozet: $labels'),
-              backgroundColor: const Color(0xFF374151),
-            ),
-          );
-        } else if (pts > 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('+$pts sosyal puan kazandın'),
-              backgroundColor: const Color(0xFF374151),
-            ),
-          );
+        final earnedGamification = pts > 0 || newBadges.isNotEmpty;
+        if (earnedGamification) {
+          final showSpotlight = await OnboardingService.shouldShowCommentPointsSpotlight();
+          if (!mounted) return;
+          if (showSpotlight) {
+            setState(() {
+              _commentPointsSpotlightVisible = true;
+              _spotlightEarnedPoints = pts;
+              _spotlightNewBadgeIds = List<String>.from(newBadges);
+            });
+            final navigatorContext = context;
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              await Future<void>.delayed(const Duration(milliseconds: 420));
+              if (!navigatorContext.mounted || !_commentPointsSpotlightVisible) return;
+              CommentPointsCoach.show(
+                context: navigatorContext,
+                anchorKey: _commentPointsSpotlightKey,
+                pointsEarned: pts,
+                newBadgeIds: newBadges,
+                onDone: () {
+                  if (!mounted) return;
+                  setState(() {
+                    _commentPointsSpotlightVisible = false;
+                    _spotlightEarnedPoints = 0;
+                    _spotlightNewBadgeIds = const [];
+                  });
+                  unawaited(_finishV1CommentPointsCoachAndReturnHome());
+                },
+              );
+            });
+          } else {
+            await _popFullTourBadgesIfNeeded();
+            if (!mounted) return;
+            if (newBadges.isNotEmpty) {
+              final labels = newBadges
+                  .map((id) => GamificationBadgeDef.byId(id)?.title ?? id)
+                  .join(', ');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('+$pts puan! Yeni rozet: $labels'),
+                  backgroundColor: const Color(0xFF374151),
+                ),
+              );
+            } else if (pts > 0) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('+$pts sosyal puan kazandın'),
+                  backgroundColor: const Color(0xFF374151),
+                ),
+              );
+            }
+          }
+        } else {
+          await _popFullTourBadgesIfNeeded();
         }
       }
     } finally {
@@ -241,7 +343,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     );
     if (confirm == true) {
       await UserMotivationService.remove(widget.item.id);
-      if (context.mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -1159,11 +1261,73 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     );
   }
 
+  Widget _buildCommentPointsRewardStrip() {
+    final pts = _spotlightEarnedPoints;
+    final badges = _spotlightNewBadgeIds;
+    final badgeText = badges.isEmpty
+        ? ''
+        : badges.map((id) => GamificationBadgeDef.byId(id)?.title ?? id).join(', ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        key: _commentPointsSpotlightKey,
+        color: const Color(0xFF0D2847),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF0095FF).withValues(alpha: 0.45)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.stars_rounded, color: Color(0xFF7DD3FC), size: 26),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      pts > 0
+                          ? '+$pts sosyal puan'
+                          : (badgeText.isNotEmpty ? 'Yeni rozet açıldı' : 'Puanın güncellendi'),
+                      style: GoogleFonts.notoSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    if (badgeText.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        badgeText,
+                        style: GoogleFonts.notoSans(
+                          fontSize: 12,
+                          height: 1.35,
+                          color: const Color(0xFFBFC7D5),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCommentComposerRow() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    return KeyedSubtree(
+      key: _onboardingComposerAreaKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+        if (_commentPointsSpotlightVisible) _buildCommentPointsRewardStrip(),
         if (_replyTo != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -1268,6 +1432,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           ],
         ),
       ],
+      ),
     );
   }
 

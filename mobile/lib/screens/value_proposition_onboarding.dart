@@ -115,30 +115,26 @@ class _ValuePropositionOnboardingState extends State<ValuePropositionOnboarding>
                         }
                       },
                       style: FilledButton.styleFrom(
-                        backgroundColor:
-                            _page <= 1 ? Colors.transparent : const Color(0xFF2094F3),
+                        backgroundColor: Colors.transparent,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(_page <= 1 ? 999 : 12),
+                          borderRadius: BorderRadius.circular(999),
                         ),
-                        shadowColor: _page <= 1 ? const Color(0x33A1C9FF) : null,
-                        elevation: _page <= 1 ? 0 : null,
+                        shadowColor: const Color(0x33A1C9FF),
+                        elevation: 0,
                       ),
                       child: Ink(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(_page <= 1 ? 999 : 12),
-                          gradient: _page <= 1
-                              ? const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color(0xFF0095FF),
-                                    Color(0xFF004880),
-                                  ],
-                                )
-                              : null,
-                          color: _page <= 1 ? null : const Color(0xFF2094F3),
+                          borderRadius: BorderRadius.circular(999),
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color(0xFF0095FF),
+                              Color(0xFF004880),
+                            ],
+                          ),
                         ),
                         child: Container(
                           width: double.infinity,
@@ -149,7 +145,7 @@ class _ValuePropositionOnboardingState extends State<ValuePropositionOnboarding>
                             style: GoogleFonts.notoSans(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
-                              letterSpacing: _page <= 1 ? 1.6 : 0,
+                              letterSpacing: 1.6,
                             ),
                           ),
                         ),

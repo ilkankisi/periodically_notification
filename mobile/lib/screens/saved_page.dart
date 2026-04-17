@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,9 @@ import '../services/saved_items_service.dart';
 import '../widgets/app_top_bar.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../services/notification_badge_controller.dart';
+import '../services/onboarding_service.dart';
+import '../widgets/saved_full_tour_coach.dart';
+import 'badges_page.dart';
 import 'notifications_page.dart';
 import 'zincir_page.dart';
 import 'content_detail_page.dart';
@@ -31,6 +35,10 @@ class SavedPage extends StatefulWidget {
 
 class _SavedPageState extends State<SavedPage> {
   int _filterIndex = 0;
+
+  final GlobalKey _firstSavedRowTourKey = GlobalKey();
+  int? _fullTourPhaseCache;
+  bool _savedListCoachScheduled = false;
   /// Figma 60-555: HEPSİ / MAKALELER / GÖRSELLER
   static const _filters = ['HEPSİ', 'MAKALELER', 'GÖRSELLER'];
 
@@ -44,6 +52,30 @@ class _SavedPageState extends State<SavedPage> {
     _load();
   }
 
+  Future<void> _refreshFullTourPhase() async {
+    await OnboardingService.ensureFullTourMigrated();
+    final p = await OnboardingService.getFullTourPhase();
+    if (!mounted) return;
+    setState(() => _fullTourPhaseCache = p);
+    await _maybeSavedListCoach();
+  }
+
+  Future<void> _maybeSavedListCoach() async {
+    if (_savedListCoachScheduled) return;
+    if (_fullTourPhaseCache != OnboardingService.ftSavedList) return;
+    if (_visibleEntries.isEmpty) return;
+    _savedListCoachScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+      if (_firstSavedRowTourKey.currentContext == null) return;
+      SavedListFullTourCoach.show(
+        context: context,
+        firstRowKey: _firstSavedRowTourKey,
+      );
+    });
+  }
+
   Future<void> _load() async {
     final entries = await SavedItemsService.getSavedEntries();
     entries.sort((a, b) => b.savedAt.compareTo(a.savedAt));
@@ -55,6 +87,7 @@ class _SavedPageState extends State<SavedPage> {
       _itemsById = byId;
       _loading = false;
     });
+    await _refreshFullTourPhase();
   }
 
   Future<void> _openNotifications() async {
@@ -406,22 +439,43 @@ class _SavedPageState extends State<SavedPage> {
   }
 
   /// Figma 60-555: üstte geniş görsel, kategori + yer imi, başlık, isteğe bağlı özet.
-  Widget _buildSavedRow({required Motivation item}) {
+  Widget _buildSavedRow({required Motivation item, GlobalKey? tourRowKey}) {
     const accent = Color(0xFF0095FF);
     final snippet = item.body.trim();
     final showSnippet = snippet.length > 48;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Material(
+    final row = Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ContentDetailPage(item: item),
-            ),
-          ).then((_) => _load()),
+          onTap: () async {
+            final ftpBefore = await OnboardingService.getFullTourPhase();
+            if (ftpBefore == OnboardingService.ftSavedList) {
+              await OnboardingService.setFullTourPhase(OnboardingService.ftSavedComment);
+            }
+            if (!mounted) return;
+            final r = await Navigator.push<String?>(
+              context,
+              MaterialPageRoute<String?>(
+                builder: (context) => ContentDetailPage(
+                  item: item,
+                  onboardingFullTourSavedFlow: ftpBefore == OnboardingService.ftSavedList,
+                ),
+              ),
+            );
+            await _load();
+            if (!mounted) return;
+            if (r == 'full_tour_badges') {
+              await Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const BadgesPage(firstLaunchPreview: false),
+                ),
+              );
+              if (!mounted) return;
+              await OnboardingService.setFullTourPhase(OnboardingService.ftFullTourDone);
+              await _refreshFullTourPhase();
+            }
+          },
           borderRadius: BorderRadius.circular(16),
           child: Ink(
             decoration: BoxDecoration(
@@ -514,7 +568,19 @@ class _SavedPageState extends State<SavedPage> {
             ),
           ),
         ),
-      ),
+    );
+    if (tourRowKey != null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: KeyedSubtree(
+          key: tourRowKey,
+          child: row,
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: row,
     );
   }
 
@@ -551,7 +617,9 @@ class _SavedPageState extends State<SavedPage> {
           final entry = visible[index];
           final item = _itemsById[entry.itemId];
           if (item == null) return const SizedBox.shrink();
-          return _buildSavedRow(item: item);
+          final tourKey =
+              index == 0 && _fullTourPhaseCache == OnboardingService.ftSavedList ? _firstSavedRowTourKey : null;
+          return _buildSavedRow(item: item, tourRowKey: tourKey);
         },
       ),
     );

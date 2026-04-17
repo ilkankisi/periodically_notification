@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -12,6 +13,8 @@ import '../services/search_history_service.dart';
 import '../widgets/app_top_bar.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../services/notification_badge_controller.dart';
+import '../services/onboarding_service.dart';
+import '../widgets/explore_full_tour_coach.dart';
 import 'notifications_page.dart';
 import 'zincir_page.dart';
 import 'content_detail_page.dart';
@@ -33,6 +36,11 @@ class ExplorePage extends StatefulWidget {
 
 class _ExplorePageState extends State<ExplorePage> {
   int _selectedCategoryIndex = 0;
+
+  final GlobalKey _exploreHeaderKey = GlobalKey();
+  final GlobalKey _firstBookmarkKey = GlobalKey();
+  int? _fullTourPhaseCache;
+  bool _fullTourIntroScheduled = false;
   /// ($categoryKey, $uppercaseLabel) — key null = Tümü
   static const List<(String?, String)> _categoryFilters = [
     (null, 'TÜMÜ'),
@@ -52,6 +60,54 @@ class _ExplorePageState extends State<ExplorePage> {
   void initState() {
     super.initState();
     _load();
+    unawaited(_refreshFullTourPhase());
+  }
+
+  Future<void> _refreshFullTourPhase() async {
+    await OnboardingService.ensureFullTourMigrated();
+    final p = await OnboardingService.getFullTourPhase();
+    if (!mounted) return;
+    setState(() => _fullTourPhaseCache = p);
+    unawaited(_maybeRunFullTourCoaches());
+  }
+
+  Future<void> _maybeRunFullTourCoaches() async {
+    final p = _fullTourPhaseCache ?? await OnboardingService.getFullTourPhase();
+    if (p == OnboardingService.ftExploreIntro && !_fullTourIntroScheduled) {
+      _fullTourIntroScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        if (!mounted) return;
+        if (_filteredItems.isEmpty) return;
+        ExploreIntroFullTourCoach.show(
+          context: context,
+          headerKey: _exploreHeaderKey,
+          onFinished: () async {
+            await OnboardingService.setFullTourPhase(OnboardingService.ftExploreSave);
+            if (mounted) {
+              setState(() => _fullTourPhaseCache = OnboardingService.ftExploreSave);
+            }
+            await Future<void>.delayed(const Duration(milliseconds: 400));
+            if (!mounted || _filteredItems.isEmpty) return;
+            ExploreSaveFullTourCoach.show(
+              context: context,
+              bookmarkKey: _firstBookmarkKey,
+            );
+          },
+        );
+      });
+      return;
+    }
+    if (p == OnboardingService.ftExploreSave) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        if (!mounted || _filteredItems.isEmpty) return;
+        ExploreSaveFullTourCoach.show(
+          context: context,
+          bookmarkKey: _firstBookmarkKey,
+        );
+      });
+    }
   }
 
   @override
@@ -91,6 +147,7 @@ class _ExplorePageState extends State<ExplorePage> {
       _savedIds.addAll(savedIds);
       _searchHistory = history;
     });
+    await _refreshFullTourPhase();
   }
 
   Future<void> _clearSearchHistory() async {
@@ -134,12 +191,15 @@ class _ExplorePageState extends State<ExplorePage> {
           alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            Text(
-              'Keşfet',
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTopBar.centeredTitleStyle(),
+            KeyedSubtree(
+              key: _exploreHeaderKey,
+              child: Text(
+                'Keşfet',
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTopBar.centeredTitleStyle(),
+              ),
             ),
             Positioned(
               right: 0,
@@ -254,9 +314,15 @@ class _ExplorePageState extends State<ExplorePage> {
                             (context, index) {
                               final item = filtered[index];
                               final featured = index == 0 && _searchQuery.isEmpty;
+                              final tourSave = _fullTourPhaseCache == OnboardingService.ftExploreSave;
+                              final bookmarkKey = (index == 0 && tourSave) ? _firstBookmarkKey : null;
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 16),
-                                child: _buildExploreHeroCard(item, featured: featured),
+                                child: _buildExploreHeroCard(
+                                  item,
+                                  featured: featured,
+                                  tourBookmarkKey: bookmarkKey,
+                                ),
                               );
                             },
                             childCount: filtered.length,
@@ -451,7 +517,11 @@ class _ExplorePageState extends State<ExplorePage> {
   }
 
   /// Figma 60-676: tam genişlik immersive kart, yer imi sağ üst, kategori + başlık altta.
-  Widget _buildExploreHeroCard(Motivation item, {bool featured = false}) {
+  Widget _buildExploreHeroCard(
+    Motivation item, {
+    bool featured = false,
+    GlobalKey? tourBookmarkKey,
+  }) {
     final imageUrl = item.displayImageUrl ?? '';
     final saved = _savedIds.contains(item.id);
     final categoryLabel = (item.category ?? 'İçerik').toUpperCase();
@@ -565,20 +635,11 @@ class _ExplorePageState extends State<ExplorePage> {
             Positioned(
               top: 12,
               right: 12,
-              child: Material(
-                color: const Color(0x99000000),
-                shape: const CircleBorder(),
-                clipBehavior: Clip.antiAlias,
-                child: IconButton(
-                  tooltip: saved ? 'Kaydedilenlerden çıkar' : 'Kaydet',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                  icon: Icon(
-                    saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                    color: saved ? const Color(0xFFA1C9FF) : Colors.white,
-                    size: 22,
-                  ),
-                  onPressed: () async {
+              child: _wrapTourKey(
+                tourBookmarkKey,
+                _buildExploreBookmarkButton(
+                  saved: saved,
+                  onToggle: () async {
                     final nowSaved = await SavedItemsService.toggleSaved(item.id);
                     if (!mounted) return;
                     setState(() {
@@ -588,12 +649,47 @@ class _ExplorePageState extends State<ExplorePage> {
                         _savedIds.remove(item.id);
                       }
                     });
+                    final ftp = await OnboardingService.getFullTourPhase();
+                    if (ftp == OnboardingService.ftExploreSave && nowSaved) {
+                      await OnboardingService.setFullTourPhase(OnboardingService.ftSavedList);
+                      if (mounted) {
+                        setState(() => _fullTourPhaseCache = OnboardingService.ftSavedList);
+                      }
+                      OnboardingService.requestTab(2);
+                    }
                   },
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _wrapTourKey(GlobalKey? key, Widget child) {
+    if (key != null) return KeyedSubtree(key: key, child: child);
+    return child;
+  }
+
+  Widget _buildExploreBookmarkButton({
+    required bool saved,
+    required Future<void> Function() onToggle,
+  }) {
+    return Material(
+      color: const Color(0x99000000),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: IconButton(
+        tooltip: saved ? 'Kaydedilenlerden çıkar' : 'Kaydet',
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        icon: Icon(
+          saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+          color: saved ? const Color(0xFFA1C9FF) : Colors.white,
+          size: 22,
+        ),
+        onPressed: onToggle,
       ),
     );
   }
