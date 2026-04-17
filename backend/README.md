@@ -21,7 +21,9 @@ go mod tidy
 docker compose up -d
 ```
 
-Bu komut PostgreSQL (5432), RabbitMQ (5672, web UI: 15672), MinIO (9000, console: 9001) başlatır.
+Bu komut PostgreSQL (5432), RabbitMQ (5672, web UI: 15672), MinIO (9000, console: 9001), API ve nginx başlatır.
+
+WAN erişimi ve `MINIO_PUBLIC_URL`: [docs/DOCKER_DESKTOP_WINDOWS_WAN.md](../docs/DOCKER_DESKTOP_WINDOWS_WAN.md).
 
 ### 4. Örnek veri ekle (isteğe bağlı)
 

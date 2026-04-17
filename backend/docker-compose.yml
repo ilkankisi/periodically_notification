@@ -5,7 +5,7 @@
 # Dış erişim: nginx 80 → api:8080. Örnek: curl http://<LAN-IP>/api/health
 #
 # WAN: router'da genelde yalnızca 80 yeterli — görseller nginx /minio/ üzerinden (mobil operatörler 9000 çıkışını kesebilir).
-# MINIO_PUBLIC_URL: istemciye dönen görsel tabanı; nginx vekili için http://<host>/minio (port yok).
+# MINIO_PUBLIC_URL: istemciye dönen görsel tabanı; nginx vekili için http://<statik_kamu_IP>/minio veya domain (port yok).
 
 services:
   # PostgreSQL - ana veritabanı
@@ -85,7 +85,7 @@ services:
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: motivationpictures
       MINIO_USE_SSL: "false"
-      # Dışarıdan görsel URL tabanı: nginx /minio/ vekili (örn. http://192.168.1.42/minio veya http://WAN_IP/minio)
+      # Dışarıdan görsel URL tabanı: nginx /minio/ vekili (örn. http://<kamusal_IP>/minio)
       MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://127.0.0.1/minio}
       PORT: "8080"
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
