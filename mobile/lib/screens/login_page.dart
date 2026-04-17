@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -8,16 +9,21 @@ import '../services/auth_service.dart';
 import '../services/gamification_service.dart';
 import '../services/notification_badge_controller.dart';
 import '../services/notification_store_service.dart';
+import '../widgets/login_full_tour_coach.dart';
 
 /// Giriş sayfası — Apple ve Google ile giriş ([Figma](https://www.figma.com/design/v3UoAoZoaW92TprwR8CSk1/Periodicly-Notification?node-id=60-1024)).
 class LoginPage extends StatefulWidget {
   const LoginPage({
     super.key,
     this.onSuccess,
+    this.onboardingFullTour = false,
   });
 
   /// Giriş başarılı olduğunda çağrılır (örn. Navigator.pop)
   final VoidCallback? onSuccess;
+
+  /// Genişletilmiş onboarding turu: coach metni ve platform spotlight’ları.
+  final bool onboardingFullTour;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -26,6 +32,10 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   bool _loading = false;
   String? _errorMessage;
+
+  final GlobalKey _googleSignInKey = GlobalKey();
+  final GlobalKey _appleSignInKey = GlobalKey();
+  bool _fullTourCoachScheduled = false;
 
   static const Color _bg = Color(0xFF131313);
   static const Color _accent = Color(0xFFA1C9FF);
@@ -73,6 +83,29 @@ class _LoginPageState extends State<LoginPage> {
 
   void _showError(String msg) {
     setState(() => _errorMessage = msg);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.onboardingFullTour) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _fullTourCoachScheduled) return;
+        _fullTourCoachScheduled = true;
+        unawaited(_showFullTourLoginCoach());
+      });
+    }
+  }
+
+  Future<void> _showFullTourLoginCoach() async {
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+    final appleKey = (Platform.isIOS || Platform.isMacOS) ? _appleSignInKey : null;
+    LoginFullTourCoach.show(
+      context: context,
+      googleKey: _googleSignInKey,
+      appleKey: appleKey,
+    );
   }
 
   String _formatAuthError(String err) {
@@ -153,7 +186,9 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Yorum yapmak ve paylaşmak için hesabınıza giriş yapın.',
+                      widget.onboardingFullTour
+                          ? 'Günlük aksiyonunu paylaşmak için giriş yap. Aşağıdaki seçeneklerden biriyle devam et.'
+                          : 'Yorum yapmak ve paylaşmak için hesabınıza giriş yapın.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.notoSans(
                         fontSize: 15,
@@ -183,12 +218,18 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 20),
                     ],
                     if (isAppleAvailable)
-                      _buildAppleButton(
-                        onPressed: _loading ? null : _signInWithApple,
+                      KeyedSubtree(
+                        key: _appleSignInKey,
+                        child: _buildAppleButton(
+                          onPressed: _loading ? null : _signInWithApple,
+                        ),
                       ),
                     if (isAppleAvailable) const SizedBox(height: 12),
-                    _buildGoogleButton(
-                      onPressed: _loading ? null : _signInWithGoogle,
+                    KeyedSubtree(
+                      key: _googleSignInKey,
+                      child: _buildGoogleButton(
+                        onPressed: _loading ? null : _signInWithGoogle,
+                      ),
                     ),
                     const SizedBox(height: 20),
                     Text(

@@ -30,10 +30,14 @@ class ContentDetailPage extends StatefulWidget {
   /// Onboarding v1: ana sayfadaki günün içeriği kartından açıldıysa yorum alanı coach’u.
   final bool onboardingV1ComposerCoach;
 
+  /// Full tur v2: Kaydedilenler’den açıldıysa yorum coach’u (faz [OnboardingService.ftSavedComment]).
+  final bool onboardingFullTourSavedFlow;
+
   const ContentDetailPage({
     super.key,
     required this.item,
     this.onboardingV1ComposerCoach = false,
+    this.onboardingFullTourSavedFlow = false,
   });
 
   @override
@@ -75,6 +79,16 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           onFlowFinished: () async {
             await OnboardingService.setOnboardingV1Phase(OnboardingService.v1NeedFirstComment);
           },
+        );
+      });
+    } else if (widget.onboardingFullTourSavedFlow && AuthService.isLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 420));
+        if (!mounted) return;
+        FirstCommentComposerCoach.show(
+          context: context,
+          composerAreaKey: _onboardingComposerAreaKey,
+          onFlowFinished: () async {},
         );
       });
     }
@@ -154,7 +168,23 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     return depth;
   }
 
+  Future<void> _popFullTourBadgesIfNeeded() async {
+    final ftp = await OnboardingService.getFullTourPhase();
+    if (ftp != OnboardingService.ftSavedComment) return;
+    if (!mounted) return;
+    await OnboardingService.setFullTourPhase(OnboardingService.ftBadgesAfterTourComment);
+    if (!mounted) return;
+    Navigator.of(context).pop<String>('full_tour_badges');
+  }
+
   Future<void> _finishV1CommentPointsCoachAndReturnHome() async {
+    final ftp = await OnboardingService.getFullTourPhase();
+    if (ftp == OnboardingService.ftSavedComment) {
+      await OnboardingService.setFullTourPhase(OnboardingService.ftBadgesAfterTourComment);
+      if (!mounted) return;
+      Navigator.of(context).pop<String>('full_tour_badges');
+      return;
+    }
     await OnboardingService.markCommentPointsSpotlightCompleted();
     if (!mounted) return;
     Navigator.of(context).pop<String>('onboarding_badges');
@@ -216,6 +246,8 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
               );
             });
           } else {
+            await _popFullTourBadgesIfNeeded();
+            if (!mounted) return;
             if (newBadges.isNotEmpty) {
               final labels = newBadges
                   .map((id) => GamificationBadgeDef.byId(id)?.title ?? id)
@@ -235,6 +267,8 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
               );
             }
           }
+        } else {
+          await _popFullTourBadgesIfNeeded();
         }
       }
     } finally {

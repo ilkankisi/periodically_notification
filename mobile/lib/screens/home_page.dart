@@ -19,6 +19,7 @@ import 'zincir_page.dart';
 import '../widgets/add_action_card.dart';
 import '../widgets/first_main_card_coach.dart';
 import '../widgets/first_mission_coach.dart';
+import '../widgets/full_tour_home_action_coach.dart';
 import '../services/onboarding_service.dart';
 import 'badges_page.dart';
 
@@ -62,6 +63,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final GlobalKey _coachMainCardKey = GlobalKey();
   bool _firstMissionCoachScheduled = false;
   bool _mainCardCoachScheduled = false;
+  bool _fullTourHomeActionScheduled = false;
 
   /// İlk görev coach için hedef widget’lar yüklü ana sayfa iskeleti (içerik henüz yok, arka planda [_load]).
   bool get _coachTargetShellActive =>
@@ -101,6 +103,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _syncOnboardingStateForBuild() async {
+    await OnboardingService.ensureFullTourMigrated();
     final wanted = await OnboardingService.shouldShowFirstMissionCoach();
     final phase = await OnboardingService.getOnboardingV1Phase();
     if (!mounted) return;
@@ -157,7 +160,40 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (mounted && items.isNotEmpty) {
       _tryScheduleFirstMissionCoach();
       unawaited(_tryScheduleMainCardCoach());
+      unawaited(_tryScheduleFullTourHomeAction());
     }
+  }
+
+  Future<void> _tryScheduleFullTourHomeAction() async {
+    if (_fullTourHomeActionScheduled) return;
+    if (!mounted) return;
+    if (items.isEmpty && !_coachTargetShellActive) return;
+    final ftp = await OnboardingService.getFullTourPhase();
+    if (ftp != OnboardingService.ftNeedHomeAction) return;
+    if (!mounted) return;
+    if (items.isEmpty && !_coachTargetShellActive) return;
+    _fullTourHomeActionScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final homeContext = context;
+      if (!homeContext.mounted) return;
+      await Future<void>.delayed(const Duration(milliseconds: 360));
+      if (!homeContext.mounted) return;
+      final actionCtx = _coachActionKey.currentContext;
+      if (actionCtx != null) {
+        await Scrollable.ensureVisible(
+          actionCtx,
+          duration: const Duration(milliseconds: 420),
+          curve: Curves.easeOutCubic,
+          alignment: 0.35,
+        );
+        if (!homeContext.mounted) return;
+      }
+      FullTourHomeActionCoach.show(
+        context: homeContext,
+        actionKey: _coachActionKey,
+      );
+    });
   }
 
   Future<void> _tryScheduleMainCardCoach() async {
@@ -227,6 +263,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _onDailyActionSavedChain() async {
+    await OnboardingService.ensureFullTourMigrated();
+    final ftp = await OnboardingService.getFullTourPhase();
+    if (ftp == OnboardingService.ftNeedHomeAction) {
+      await _load();
+      if (!mounted) return;
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => const BadgesPage(firstLaunchPreview: false),
+        ),
+      );
+      if (!mounted) return;
+      await OnboardingService.setFullTourPhase(OnboardingService.ftExploreIntro);
+      OnboardingService.requestTab(1);
+      await _syncOnboardingStateForBuild();
+      return;
+    }
     final phaseBefore = await OnboardingService.getOnboardingV1Phase();
     if (phaseBefore == OnboardingService.v1NeedDailyAction) {
       await OnboardingService.setOnboardingV1Phase(OnboardingService.v1NeedMainCardCoach);
@@ -235,6 +288,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _pushContentDetailV1Aware(Motivation item, {required bool isMainHero}) async {
+    if (await OnboardingService.isFullTourBlockingLegacyV1()) {
+      if (!mounted) return;
+      await Navigator.push<String?>(
+        context,
+        MaterialPageRoute<String?>(
+          builder: (context) => ContentDetailPage(item: item),
+        ),
+      );
+      return;
+    }
     var phase = await OnboardingService.getOnboardingV1Phase();
     var openComposerCoach = false;
     if (isMainHero && phase == OnboardingService.v1NeedMainCardCoach) {
