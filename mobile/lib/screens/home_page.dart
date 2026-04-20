@@ -34,6 +34,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  static const bool _tourDebugLogs = true;
+
   /// Coach hedefleri için ana düzeni yükleme bitmeden göstermek (tutorial önce).
   static const String _coachShellPlaceholderId = '_coach_shell_placeholder';
   static final Motivation _kCoachShellPlaceholder = Motivation(
@@ -75,6 +77,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  void _tourLog(String message) {
+    if (!_tourDebugLogs) return;
+    debugPrint('[TOUR][Home] $message');
+  }
+
   void _onDebugFirstMissionCoachCycleDone() {
     if (!mounted) return;
     setState(() => _firstMissionCoachScheduled = false);
@@ -105,6 +112,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await OnboardingService.ensureFullTourMigrated();
     final wanted = await OnboardingService.shouldShowFirstMissionCoach();
     final globalStep = await OnboardingService.getGlobalTourStep();
+    _tourLog(
+      '_syncOnboardingStateForBuild step=$globalStep '
+      'wantedFirstMission=$wanted items=${items.length} loading=$loading',
+    );
     if (!mounted) return;
     setState(() {
       _firstMissionCoachWanted = wanted;
@@ -138,6 +149,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _load() async {
+    _tourLog('_load start');
     await ContentSyncService.syncFromBackend();
     // Anasayfada önce bildirimle (FCM) gelen içerikler
     final delivered = await MotivationService.loadDeliveredOnly();
@@ -147,6 +159,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _hasDeliveredContent = true;
         loading = false;
       });
+      _tourLog('_load delivered=${delivered.length}');
     } else {
       // Bildirim gelmemişse: Keşfet'ten ilk 5 içeriği "Bugünün Önerisi" olarak göster
       final all = await MotivationService.loadAll();
@@ -155,11 +168,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _hasDeliveredContent = false;
         loading = false;
       });
+      _tourLog('_load fallback=${items.length}');
     }
     // Widget'ı güncelle - FCM arka planda geldiyse resim burada indirilir
     PushNotificationService.refreshWidgetFromCache();
     await _syncOnboardingStateForBuild();
     if (mounted && items.isNotEmpty) {
+      _tourLog('_load scheduling coaches with items=${items.length}');
       _tryScheduleFirstMissionCoach();
       unawaited(_tryScheduleMainCardCoach());
       unawaited(_tryScheduleFullTourHomeAction());
@@ -167,14 +182,33 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _tryScheduleFullTourHomeAction() async {
-    if (_fullTourHomeActionScheduled) return;
-    if (!mounted) return;
-    if (items.isEmpty && !_coachTargetShellActive) return;
+    if (_fullTourHomeActionScheduled) {
+      _tourLog('_tryScheduleFullTourHomeAction skip=already_scheduled');
+      return;
+    }
+    if (!mounted) {
+      _tourLog('_tryScheduleFullTourHomeAction skip=not_mounted');
+      return;
+    }
+    if (items.isEmpty && !_coachTargetShellActive) {
+      _tourLog('_tryScheduleFullTourHomeAction skip=no_items');
+      return;
+    }
     final ftp = await OnboardingService.getGlobalTourStep();
-    if (ftp != OnboardingService.ftNeedHomeAction) return;
-    if (!mounted) return;
-    if (items.isEmpty && !_coachTargetShellActive) return;
+    if (ftp != OnboardingService.ftNeedHomeAction) {
+      _tourLog('_tryScheduleFullTourHomeAction skip=wrong_step step=$ftp');
+      return;
+    }
+    if (!mounted) {
+      _tourLog('_tryScheduleFullTourHomeAction skip=not_mounted_after_await');
+      return;
+    }
+    if (items.isEmpty && !_coachTargetShellActive) {
+      _tourLog('_tryScheduleFullTourHomeAction skip=no_items_after_await');
+      return;
+    }
     _fullTourHomeActionScheduled = true;
+    _tourLog('_tryScheduleFullTourHomeAction scheduled');
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final homeContext = context;
@@ -185,6 +219,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (cardCtx == null) {
         // Hedef henüz mount olmadıysa kilidi açıp tekrar dene.
         _fullTourHomeActionScheduled = false;
+        _tourLog('_tryScheduleFullTourHomeAction retry=target_null');
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) unawaited(_tryScheduleFullTourHomeAction());
         });
@@ -197,10 +232,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         alignment: 0.15,
       );
       if (!homeContext.mounted) return;
+      _tourLog('_tryScheduleFullTourHomeAction show=coach');
       FullTourHomeActionCoach.show(
         context: homeContext,
         targetKey: _coachMainCardKey,
         onFinished: () async {
+          _tourLog('home_coach finished -> explore');
           await OnboardingService.setGlobalTourStep(
             OnboardingService.ftExploreIntro,
           );
