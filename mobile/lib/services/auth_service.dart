@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -131,25 +132,41 @@ class AuthService {
 
   /// true: başarılı, false: kullanıcı iptal.
   static Future<bool> signInWithGoogle() async {
-    final account = await _googleSignIn.signIn();
-    if (account == null) return false;
-    final auth = await account.authentication;
-    final idToken = auth.idToken;
-    if (idToken == null || idToken.isEmpty) {
-      await _googleSignIn.signOut();
-      throw Exception(
-        'Google idToken yok. Android için --dart-define=GOOGLE_SERVER_CLIENT_ID=... (Web client ID) ekleyin.',
-      );
+    try {
+      final account = await _googleSignIn.signIn();
+      if (account == null) return false;
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        await _googleSignIn.signOut();
+        throw Exception(
+          'Google idToken yok. Android için --dart-define=GOOGLE_SERVER_CLIENT_ID=... (Web client ID) ekleyin.',
+        );
+      }
+      final data = await BackendService.client.oauthGoogle(idToken: idToken);
+      final token = data['token'] as String?;
+      final user = data['user'] as Map<String, dynamic>?;
+      if (token == null || user == null) {
+        await _googleSignIn.signOut();
+        throw Exception('Geçersiz sunucu yanıtı.');
+      }
+      await _saveSession(user, token);
+      return true;
+    } on PlatformException catch (e) {
+      final m = e.message ?? '';
+      // DEVELOPER_ERROR: genelde OAuth Android istemcisinde SHA-1 / paket adı eksik (emülatör ≠ telefon imzası).
+      if (m.contains('ApiException: 10') ||
+          m.contains('DEVELOPER_ERROR') ||
+          RegExp(r'ApiException:\s*10\b').hasMatch(m)) {
+        throw Exception(
+          'Google Android yapılandırması (SHA-1): Google Cloud Console’da bu uygulama için '
+          'OAuth 2.0 “Android” istemcisinde paket adı `com.siyazilim.periodicallynotification` '
+          've geliştirme için `debug.keystore` SHA-1 parmak izi tanımlı olmalı. '
+          'Telefon ve emülatör farklı imza kullanabilir; ikisini de ekleyin.',
+        );
+      }
+      rethrow;
     }
-    final data = await BackendService.client.oauthGoogle(idToken: idToken);
-    final token = data['token'] as String?;
-    final user = data['user'] as Map<String, dynamic>?;
-    if (token == null || user == null) {
-      await _googleSignIn.signOut();
-      throw Exception('Geçersiz sunucu yanıtı.');
-    }
-    await _saveSession(user, token);
-    return true;
   }
 
   static Future<void> signOut() async {

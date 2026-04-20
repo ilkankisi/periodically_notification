@@ -16,7 +16,6 @@ import 'all_content_list_page.dart';
 import 'content_detail_page.dart';
 import 'notifications_page.dart';
 import 'zincir_page.dart';
-import '../widgets/add_action_card.dart';
 import '../widgets/first_main_card_coach.dart';
 import '../widgets/first_mission_coach.dart';
 import '../widgets/full_tour_home_action_coach.dart';
@@ -24,11 +23,7 @@ import '../services/onboarding_service.dart';
 import 'badges_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({
-    super.key,
-    this.showBottomBar = true,
-    this.onTabTap,
-  });
+  const HomePage({super.key, this.showBottomBar = true, this.onTabTap});
 
   /// false ise alt navigasyon bar gösterilmez (MainShell kullanıyorsa).
   final bool showBottomBar;
@@ -58,7 +53,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   StreamSubscription<void>? _contentUpdateSub;
 
-  final GlobalKey _coachActionKey = GlobalKey();
   final GlobalKey _coachZincirKey = GlobalKey();
   final GlobalKey _coachMainCardKey = GlobalKey();
   bool _firstMissionCoachScheduled = false;
@@ -75,7 +69,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       width: double.infinity,
       color: const Color(0xFF27272A),
       child: const Center(
-        child: Icon(Icons.image_not_supported_outlined, color: Color(0xFF52525B), size: 40),
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: Color(0xFF52525B),
+          size: 40,
+        ),
       ),
     );
   }
@@ -93,11 +91,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     if (OnboardingService.kDebugRepeatFirstMissionCoach) {
-      OnboardingService.setDebugFirstMissionCoachCycleListener(_onDebugFirstMissionCoachCycleDone);
+      OnboardingService.setDebugFirstMissionCoachCycleListener(
+        _onDebugFirstMissionCoachCycleDone,
+      );
     }
     unawaited(_syncOnboardingStateForBuild());
     _load();
-    _contentUpdateSub = PushNotificationService.onContentUpdated.stream.listen((_) {
+    _contentUpdateSub = PushNotificationService.onContentUpdated.stream.listen((
+      _,
+    ) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     });
   }
@@ -168,7 +170,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (_fullTourHomeActionScheduled) return;
     if (!mounted) return;
     if (items.isEmpty && !_coachTargetShellActive) return;
-    final ftp = await OnboardingService.getFullTourPhase();
+    final ftp = await OnboardingService.getGlobalTourStep();
     if (ftp != OnboardingService.ftNeedHomeAction) return;
     if (!mounted) return;
     if (items.isEmpty && !_coachTargetShellActive) return;
@@ -179,19 +181,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (!homeContext.mounted) return;
       await Future<void>.delayed(const Duration(milliseconds: 360));
       if (!homeContext.mounted) return;
-      final actionCtx = _coachActionKey.currentContext;
-      if (actionCtx != null) {
+      final cardCtx = _coachMainCardKey.currentContext;
+      if (cardCtx != null) {
         await Scrollable.ensureVisible(
-          actionCtx,
+          cardCtx,
           duration: const Duration(milliseconds: 420),
           curve: Curves.easeOutCubic,
-          alignment: 0.35,
+          alignment: 0.15,
         );
         if (!homeContext.mounted) return;
       }
       FullTourHomeActionCoach.show(
         context: homeContext,
-        actionKey: _coachActionKey,
+        targetKey: _coachMainCardKey,
       );
     });
   }
@@ -244,50 +246,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (!homeContext.mounted) return;
       await Future<void>.delayed(const Duration(milliseconds: 360));
       if (!homeContext.mounted) return;
-      final actionCtx = _coachActionKey.currentContext;
-      if (actionCtx != null) {
+      final cardCtx = _coachMainCardKey.currentContext;
+      if (cardCtx != null) {
         await Scrollable.ensureVisible(
-          actionCtx,
+          cardCtx,
           duration: const Duration(milliseconds: 420),
           curve: Curves.easeOutCubic,
-          alignment: 0.35,
+          alignment: 0.15,
         );
         if (!homeContext.mounted) return;
       }
       FirstMissionCoach.show(
         context: homeContext,
-        actionKey: _coachActionKey,
+        mainCardKey: _coachMainCardKey,
         zincirKey: _coachZincirKey,
       );
     });
   }
 
-  Future<void> _onDailyActionSavedChain() async {
-    await OnboardingService.ensureFullTourMigrated();
-    final ftp = await OnboardingService.getFullTourPhase();
-    if (ftp == OnboardingService.ftNeedHomeAction) {
-      await _load();
-      if (!mounted) return;
-      await Navigator.push<void>(
-        context,
-        MaterialPageRoute<void>(
-          builder: (_) => const BadgesPage(firstLaunchPreview: false),
-        ),
-      );
-      if (!mounted) return;
-      await OnboardingService.setFullTourPhase(OnboardingService.ftExploreIntro);
-      OnboardingService.requestTab(1);
-      await _syncOnboardingStateForBuild();
-      return;
-    }
-    final phaseBefore = await OnboardingService.getOnboardingV1Phase();
-    if (phaseBefore == OnboardingService.v1NeedDailyAction) {
-      await OnboardingService.setOnboardingV1Phase(OnboardingService.v1NeedMainCardCoach);
-    }
-    await _load();
-  }
-
-  Future<void> _pushContentDetailV1Aware(Motivation item, {required bool isMainHero}) async {
+  Future<void> _pushContentDetailV1Aware(
+    Motivation item, {
+    required bool isMainHero,
+  }) async {
     if (await OnboardingService.isFullTourBlockingLegacyV1()) {
       if (!mounted) return;
       await Navigator.push<String?>(
@@ -301,8 +281,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     var phase = await OnboardingService.getOnboardingV1Phase();
     var openComposerCoach = false;
     if (isMainHero && phase == OnboardingService.v1NeedMainCardCoach) {
-      await OnboardingService.setOnboardingV1Phase(OnboardingService.v1NeedComposerCoach);
-      if (mounted) setState(() => _v1Phase = OnboardingService.v1NeedComposerCoach);
+      await OnboardingService.setOnboardingV1Phase(
+        OnboardingService.v1NeedComposerCoach,
+      );
+      if (mounted) {
+        setState(() => _v1Phase = OnboardingService.v1NeedComposerCoach);
+      }
       openComposerCoach = true;
     } else if (phase == OnboardingService.v1NeedComposerCoach) {
       openComposerCoach = true;
@@ -387,7 +371,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     children: [
                       IconButton(
                         tooltip: 'Bildirimler',
-                        icon: const Icon(Icons.notifications_none_rounded, color: Color(0xFFE8E8E8), size: 26),
+                        icon: const Icon(
+                          Icons.notifications_none_rounded,
+                          color: Color(0xFFE8E8E8),
+                          size: 26,
+                        ),
                         onPressed: _openNotifications,
                       ),
                       if (showBadge)
@@ -400,11 +388,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               color: Colors.redAccent,
                               shape: BoxShape.circle,
                             ),
-                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
                             child: Center(
                               child: Text(
                                 count > 9 ? '9+' : count.toString(),
-                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
@@ -447,7 +442,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 children: [
                   IconButton(
                     tooltip: 'Aksiyon zinciri',
-                    icon: const Icon(Icons.link_rounded, color: Color(0xFFE8E8E8), size: 24),
+                    icon: const Icon(
+                      Icons.link_rounded,
+                      color: Color(0xFFE8E8E8),
+                      size: 24,
+                    ),
                     onPressed: _openChain,
                   ),
                   AnimatedBuilder(
@@ -460,7 +459,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         children: [
                           IconButton(
                             tooltip: 'Bildirimler',
-                            icon: const Icon(Icons.notifications_none_rounded, color: Color(0xFFE8E8E8), size: 26),
+                            icon: const Icon(
+                              Icons.notifications_none_rounded,
+                              color: Color(0xFFE8E8E8),
+                              size: 26,
+                            ),
                             onPressed: _openNotifications,
                           ),
                           if (showBadge)
@@ -473,11 +476,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   color: Colors.redAccent,
                                   shape: BoxShape.circle,
                                 ),
-                                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
                                 child: Center(
                                   child: Text(
                                     count > 9 ? '9+' : count.toString(),
-                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -508,7 +518,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-                child: loading ? _buildFigmaLoadingEmptyBody() : _buildFigmaNoDataBody(),
+                child: loading
+                    ? _buildFigmaLoadingEmptyBody()
+                    : _buildFigmaNoDataBody(),
               ),
             ),
           );
@@ -575,10 +587,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
         ),
         const SizedBox(height: 28),
-        _buildFigmaHabitSectionHeader(),
-        const SizedBox(height: 12),
-        _buildFigmaHabitWaitingCard(),
-        const SizedBox(height: 28),
         _buildFigmaPatienceQuote(),
       ],
     );
@@ -609,11 +617,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.auto_awesome, color: Color(0xFFA1C9FF), size: 22),
+                    Icon(
+                      Icons.auto_awesome,
+                      color: Color(0xFFA1C9FF),
+                      size: 22,
+                    ),
                     SizedBox(width: 2),
-                    Icon(Icons.auto_awesome, color: Color(0xFF7EB6FF), size: 16),
+                    Icon(
+                      Icons.auto_awesome,
+                      color: Color(0xFF7EB6FF),
+                      size: 16,
+                    ),
                     SizedBox(width: 2),
-                    Icon(Icons.auto_awesome, color: Color(0xFF5DA3FF), size: 14),
+                    Icon(
+                      Icons.auto_awesome,
+                      color: Color(0xFF5DA3FF),
+                      size: 14,
+                    ),
                   ],
                 ),
               ),
@@ -643,10 +663,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
         ),
         const SizedBox(height: 28),
-        _buildFigmaHabitSectionHeader(),
-        const SizedBox(height: 12),
-        _buildFigmaHabitWaitingCard(),
-        const SizedBox(height: 28),
         _buildFigmaPatienceQuote(),
         const SizedBox(height: 8),
         Center(
@@ -675,11 +691,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF2A2A2E),
-              Color(0xFF1E1E22),
-              Color(0xFF161618),
-            ],
+            colors: [Color(0xFF2A2A2E), Color(0xFF1E1E22), Color(0xFF161618)],
           ),
           boxShadow: [
             BoxShadow(
@@ -694,9 +706,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           clipBehavior: Clip.none,
           children: [
             Positioned.fill(
-              child: CustomPaint(
-                painter: _HomeEmptyWavePainter(),
-              ),
+              child: CustomPaint(painter: _HomeEmptyWavePainter()),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 40, 24, 40),
@@ -704,102 +714,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildFigmaHabitSectionHeader() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Text(
-            'Bugünkü Alışkanlığın',
-            style: GoogleFonts.newsreader(
-              color: const Color(0xFFE2E2E2),
-              fontSize: 22,
-              fontWeight: FontWeight.w600,
-              height: 1.2,
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            'HAZIRLANIYOR',
-            style: GoogleFonts.notoSans(
-              color: const Color(0xFFA1C9FF),
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.1,
-              height: 1,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFigmaHabitWaitingCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF2C2C2C)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFF2A2A2A),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.hourglass_top_rounded, color: Color(0xFFBFC7D5), size: 26),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            'Henüz bugünün içeriği hazır değil.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSans(
-              color: const Color(0xFFE5E7EB),
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              height: 1.3,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Zihnini dinlendir, yeni hedeflerin yolda.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSans(
-              color: const Color(0xFF9CA3AF),
-              fontSize: 14,
-              height: 1.45,
-            ),
-          ),
-          const SizedBox(height: 22),
-          _buildFigmaSkeletonBar(width: double.infinity),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.center,
-            child: _buildFigmaSkeletonBar(width: 200),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFigmaSkeletonBar({required double width}) {
-    return Container(
-      width: width,
-      height: 10,
-      decoration: BoxDecoration(
-        color: const Color(0xFF2F2F2F),
-        borderRadius: BorderRadius.circular(999),
       ),
     );
   }
@@ -823,7 +737,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final latest = items.isNotEmpty ? items.first : _kCoachShellPlaceholder;
     final isShellPlaceholder = items.isEmpty;
     final hasPreviousDays = items.length > 1;
-    final showEmptyLayout = (loading || items.isEmpty) && !_coachTargetShellActive;
+    final showEmptyLayout =
+        (loading || items.isEmpty) && !_coachTargetShellActive;
 
     if (showEmptyLayout) {
       return Scaffold(
@@ -834,7 +749,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             children: [
               _buildEmptyHomeAppBar(),
               Expanded(child: _buildEmptyOrLoadingBody()),
-              if (widget.showBottomBar) BottomNavBar(activeIndex: 0, onTabTap: widget.onTabTap),
+              if (widget.showBottomBar)
+                BottomNavBar(activeIndex: 0, onTabTap: widget.onTabTap),
             ],
           ),
         ),
@@ -859,11 +775,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildMainCard(latest, isSuggested: _isSuggestedContent, isShellPlaceholder: isShellPlaceholder),
+                      _buildMainCard(
+                        latest,
+                        isSuggested: _isSuggestedContent,
+                        isShellPlaceholder: isShellPlaceholder,
+                      ),
                       const SizedBox(height: 16),
                       _buildZincirPillButton(key: _coachZincirKey),
-                      const SizedBox(height: 28),
-                      _buildHabitSection(latest, lockActionCard: isShellPlaceholder),
                       if (hasPreviousDays) ...[
                         const SizedBox(height: 32),
                         Row(
@@ -874,7 +792,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _isSuggestedContent ? 'Daha fazla içerik' : 'Önceki Günler',
+                                    _isSuggestedContent
+                                        ? 'Daha fazla içerik'
+                                        : 'Önceki Günler',
                                     style: GoogleFonts.newsreader(
                                       color: const Color(0xFFE2E2E2),
                                       fontSize: 22,
@@ -901,7 +821,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               onPressed: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => const AllContentListPage(),
+                                  builder: (context) =>
+                                      const AllContentListPage(),
                                 ),
                               ),
                               style: TextButton.styleFrom(
@@ -928,11 +849,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           child: ListView.separated(
                             scrollDirection: Axis.horizontal,
                             itemCount: items.length - 1,
-                            separatorBuilder: (_, __) => const SizedBox(width: 14),
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 14),
                             itemBuilder: (context, index) {
                               final item = items[index + 1];
                               return GestureDetector(
-                                onTap: () => unawaited(_pushContentDetailV1Aware(item, isMainHero: false)),
+                                onTap: () => unawaited(
+                                  _pushContentDetailV1Aware(
+                                    item,
+                                    isMainHero: false,
+                                  ),
+                                ),
                                 child: _smallCard(item),
                               );
                             },
@@ -944,7 +871,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               ),
             ),
-            if (widget.showBottomBar) BottomNavBar(activeIndex: 0, onTabTap: widget.onTabTap),
+            if (widget.showBottomBar)
+              BottomNavBar(activeIndex: 0, onTabTap: widget.onTabTap),
           ],
         ),
       ),
@@ -967,7 +895,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.link_rounded, color: Color(0xFFA1C9FF), size: 22),
+                const Icon(
+                  Icons.link_rounded,
+                  color: Color(0xFFA1C9FF),
+                  size: 22,
+                ),
                 const SizedBox(width: 10),
                 Text(
                   'Zincir ve rozetlerini gör',
@@ -985,78 +917,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  /// Ana değer önerisi — Figma 60-404 (mavi daire check + kompakt aksiyon kartı).
-  Widget _buildHabitSection(Motivation latest, {bool lockActionCard = false}) {
-    final actionBlock = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFF0095FF),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x400095FF),
-                    blurRadius: 12,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.check_rounded, color: Colors.white, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Bugünkü alışkanlığın',
-                style: GoogleFonts.newsreader(
-                  color: const Color(0xFFE2E2E2),
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  height: 1.2,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Motivasyon tek başına yetmez — ne yaptığını yaz...',
-          style: GoogleFonts.notoSans(
-            color: const Color(0xFF9CA3AF),
-            fontSize: 14,
-            height: 1.5,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-        const SizedBox(height: 18),
-        Container(
-          key: _coachActionKey,
-          child: AddActionCard(
-            quoteId: latest.id,
-            quoteTitle: latest.title,
-            onActionSaved: () => unawaited(_onDailyActionSavedChain()),
-            titleText: 'BUGÜN BU SÖZLE NE YAPTIN?',
-            hintText: 'Düşüncelerini ve eylemlerini buraya not et...',
-            showDescription: false,
-          ),
-        ),
-      ],
-    );
-    if (lockActionCard) {
-      return AbsorbPointer(child: actionBlock);
-    }
-    return actionBlock;
-  }
-
   /// Figma 60-404: tam genişlik hero, görsel üzerinde rozet + italik başlık.
   static const double _homeHeroImageHeight = 300;
 
-  Widget _buildMainCard(Motivation latest, {bool isSuggested = false, bool isShellPlaceholder = false}) {
+  Widget _buildMainCard(
+    Motivation latest, {
+    bool isSuggested = false,
+    bool isShellPlaceholder = false,
+  }) {
     final badge = isSuggested ? 'BUGÜNÜN ÖNERİSİ' : 'GÜNÜN İLHAMI';
     final shell = isShellPlaceholder || latest.id == _coachShellPlaceholderId;
 
@@ -1081,7 +949,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         width: double.infinity,
         height: _homeHeroImageHeight,
       );
-    } else if (latest.displayImageUrl != null && latest.displayImageUrl!.isNotEmpty) {
+    } else if (latest.displayImageUrl != null &&
+        latest.displayImageUrl!.isNotEmpty) {
       heroImage = MotivationCachedImage(
         imageUrl: latest.displayImageUrl!,
         fit: BoxFit.cover,
@@ -1116,106 +985,110 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             width: double.infinity,
             child: heroImage,
           ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 96,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withValues(alpha: 0.5),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 200,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.55),
-                        Colors.black.withValues(alpha: 0.88),
-                      ],
-                      stops: const [0.0, 0.45, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 16,
-              top: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 96,
+            child: IgnorePointer(
+              child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: const Color(0xB3000000),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0xFF0095FF).withValues(alpha: 0.4)),
-                ),
-                child: Text(
-                  badge,
-                  style: GoogleFonts.notoSans(
-                    color: const Color(0xFFA1C9FF),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.85,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.5),
+                      Colors.transparent,
+                    ],
                   ),
                 ),
               ),
             ),
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 24,
-              child: Text(
-                latest.title,
-                textAlign: TextAlign.center,
-                maxLines: 5,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.newsreader(
-                  color: const Color(0xFFF5F5F5),
-                  fontSize: 26,
-                  fontWeight: FontWeight.w600,
-                  fontStyle: FontStyle.italic,
-                  height: 1.2,
-                  letterSpacing: -0.3,
-                  shadows: const [
-                    Shadow(
-                      offset: Offset(0, 1),
-                      blurRadius: 12,
-                      color: Color(0x99000000),
-                    ),
-                  ],
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 200,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.55),
+                      Colors.black.withValues(alpha: 0.88),
+                    ],
+                    stops: const [0.0, 0.45, 1.0],
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
-      );
+          ),
+          Positioned(
+            left: 16,
+            top: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xB3000000),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: const Color(0xFF0095FF).withValues(alpha: 0.4),
+                ),
+              ),
+              child: Text(
+                badge,
+                style: GoogleFonts.notoSans(
+                  color: const Color(0xFFA1C9FF),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.85,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 24,
+            child: Text(
+              latest.title,
+              textAlign: TextAlign.center,
+              maxLines: 5,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.newsreader(
+                color: const Color(0xFFF5F5F5),
+                fontSize: 26,
+                fontWeight: FontWeight.w600,
+                fontStyle: FontStyle.italic,
+                height: 1.2,
+                letterSpacing: -0.3,
+                shadows: const [
+                  Shadow(
+                    offset: Offset(0, 1),
+                    blurRadius: 12,
+                    color: Color(0x99000000),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
 
     if (shell) {
       return AbsorbPointer(child: cardBody);
     }
-    final attachMainCoachKey = _v1Phase == OnboardingService.v1NeedMainCardCoach;
+    final attachMainCoachKey =
+        _v1Phase == OnboardingService.v1NeedMainCardCoach;
     return GestureDetector(
       key: attachMainCoachKey ? _coachMainCardKey : null,
-      onTap: () => unawaited(_pushContentDetailV1Aware(latest, isMainHero: true)),
+      onTap: () =>
+          unawaited(_pushContentDetailV1Aware(latest, isMainHero: true)),
       child: cardBody,
     );
   }
@@ -1250,15 +1123,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     height: 100,
                   )
                 : (m.displayImageUrl != null && m.displayImageUrl!.isNotEmpty
-                    ? MotivationCachedImage(
-                        imageUrl: m.displayImageUrl!,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: 100,
-                        placeholder: (c, u) => Container(color: const Color(0xFF27272A)),
-                        error: (c, u, e) => _homeImagePlaceholder(100),
-                      )
-                    : _homeImagePlaceholder(100)),
+                      ? MotivationCachedImage(
+                          imageUrl: m.displayImageUrl!,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: 100,
+                          placeholder: (c, u) =>
+                              Container(color: const Color(0xFF27272A)),
+                          error: (c, u, e) => _homeImagePlaceholder(100),
+                        )
+                      : _homeImagePlaceholder(100)),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
@@ -1302,8 +1176,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final parsed = DateTime.tryParse(sentAt);
       if (parsed != null) {
         const months = [
-          'OCAK', 'ŞUBAT', 'MART', 'NİSAN', 'MAYIS', 'HAZİRAN',
-          'TEMMUZ', 'AĞUSTOS', 'EYLÜL', 'EKİM', 'KASIM', 'ARALIK',
+          'OCAK',
+          'ŞUBAT',
+          'MART',
+          'NİSAN',
+          'MAYIS',
+          'HAZİRAN',
+          'TEMMUZ',
+          'AĞUSTOS',
+          'EYLÜL',
+          'EKİM',
+          'KASIM',
+          'ARALIK',
         ];
         return '${parsed.day} ${months[parsed.month - 1]}';
       }
@@ -1358,4 +1242,3 @@ class _HomeEmptyWavePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-

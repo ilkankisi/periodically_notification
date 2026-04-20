@@ -20,11 +20,7 @@ import 'content_detail_page.dart';
 
 /// Kaydedilenler: Figma boş (60-498) / dolu (60-555) ile uyumlu koyu tema.
 class SavedPage extends StatefulWidget {
-  const SavedPage({
-    super.key,
-    this.showBottomBar = true,
-    this.onTabTap,
-  });
+  const SavedPage({super.key, this.showBottomBar = true, this.onTabTap});
 
   final bool showBottomBar;
   final ValueChanged<int>? onTabTap;
@@ -39,6 +35,7 @@ class _SavedPageState extends State<SavedPage> {
   final GlobalKey _firstSavedRowTourKey = GlobalKey();
   int? _fullTourPhaseCache;
   bool _savedListCoachScheduled = false;
+
   /// Figma 60-555: HEPSİ / MAKALELER / GÖRSELLER
   static const _filters = ['HEPSİ', 'MAKALELER', 'GÖRSELLER'];
 
@@ -54,7 +51,7 @@ class _SavedPageState extends State<SavedPage> {
 
   Future<void> _refreshFullTourPhase() async {
     await OnboardingService.ensureFullTourMigrated();
-    final p = await OnboardingService.getFullTourPhase();
+    final p = await OnboardingService.getGlobalTourStep();
     if (!mounted) return;
     setState(() => _fullTourPhaseCache = p);
     await _maybeSavedListCoach();
@@ -136,7 +133,11 @@ class _SavedPageState extends State<SavedPage> {
                     children: [
                       IconButton(
                         tooltip: 'Aksiyon zinciri',
-                        icon: const Icon(Icons.link_rounded, color: Color(0xFFBFC7D5), size: 22),
+                        icon: const Icon(
+                          Icons.link_rounded,
+                          color: Color(0xFFBFC7D5),
+                          size: 22,
+                        ),
                         onPressed: _openChain,
                       ),
                       AnimatedBuilder(
@@ -149,7 +150,11 @@ class _SavedPageState extends State<SavedPage> {
                             children: [
                               IconButton(
                                 tooltip: 'Bildirimler',
-                                icon: const Icon(Icons.notifications_none_rounded, color: Color(0xFFBFC7D5), size: 24),
+                                icon: const Icon(
+                                  Icons.notifications_none_rounded,
+                                  color: Color(0xFFBFC7D5),
+                                  size: 24,
+                                ),
                                 onPressed: _openNotifications,
                               ),
                               if (showBadge)
@@ -162,11 +167,18 @@ class _SavedPageState extends State<SavedPage> {
                                       color: Colors.redAccent,
                                       shape: BoxShape.circle,
                                     ),
-                                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 16,
+                                      minHeight: 16,
+                                    ),
                                     child: Center(
                                       child: Text(
                                         count > 9 ? '9+' : count.toString(),
-                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -230,19 +242,28 @@ class _SavedPageState extends State<SavedPage> {
               onTap: () => setState(() => _filterIndex = i),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
-                  color: _filterIndex == i ? const Color(0xFF0095FF) : const Color(0xFF2A2A2A),
+                  color: _filterIndex == i
+                      ? const Color(0xFF0095FF)
+                      : const Color(0xFF2A2A2A),
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(
-                    color: _filterIndex == i ? const Color(0xFF0095FF) : const Color(0xFF404040),
+                    color: _filterIndex == i
+                        ? const Color(0xFF0095FF)
+                        : const Color(0xFF404040),
                     width: 1,
                   ),
                 ),
                 child: Text(
                   _filters[i],
                   style: GoogleFonts.notoSans(
-                    color: _filterIndex == i ? Colors.white : const Color(0xFF9CA3AF),
+                    color: _filterIndex == i
+                        ? Colors.white
+                        : const Color(0xFF9CA3AF),
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.6,
@@ -411,7 +432,8 @@ class _SavedPageState extends State<SavedPage> {
         width: double.infinity,
       );
     }
-    if (item.displayImageUrl != null && item.displayImageUrl!.trim().isNotEmpty) {
+    if (item.displayImageUrl != null &&
+        item.displayImageUrl!.trim().isNotEmpty) {
       return MotivationCachedImage(
         imageUrl: item.displayImageUrl!,
         fit: BoxFit.cover,
@@ -421,7 +443,10 @@ class _SavedPageState extends State<SavedPage> {
           child: const SizedBox(
             width: 28,
             height: 28,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0095FF)),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Color(0xFF0095FF),
+            ),
           ),
         ),
         error: (_, __, ___) => _savedCardImagePlaceholder(),
@@ -434,7 +459,11 @@ class _SavedPageState extends State<SavedPage> {
     return Container(
       color: const Color(0xFF1C1C1E),
       alignment: Alignment.center,
-      child: const Icon(Icons.article_outlined, color: Color(0xFF6B7280), size: 48),
+      child: const Icon(
+        Icons.article_outlined,
+        color: Color(0xFF6B7280),
+        size: 48,
+      ),
     );
   }
 
@@ -445,143 +474,148 @@ class _SavedPageState extends State<SavedPage> {
     final showSnippet = snippet.length > 48;
 
     final row = Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () async {
-            final ftpBefore = await OnboardingService.getFullTourPhase();
-            if (ftpBefore == OnboardingService.ftSavedList) {
-              await OnboardingService.setFullTourPhase(OnboardingService.ftSavedComment);
-            }
-            if (!mounted) return;
-            final r = await Navigator.push<String?>(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          final ftpBefore = await OnboardingService.getGlobalTourStep();
+          if (ftpBefore == OnboardingService.ftSavedList) {
+            await OnboardingService.setGlobalTourStep(
+              OnboardingService.ftSavedComment,
+            );
+          }
+          if (!mounted) return;
+          final r = await Navigator.push<String?>(
+            context,
+            MaterialPageRoute<String?>(
+              builder: (context) => ContentDetailPage(
+                item: item,
+                onboardingFullTourSavedFlow:
+                    ftpBefore == OnboardingService.ftSavedList,
+              ),
+            ),
+          );
+          await _load();
+          if (!mounted) return;
+          if (r == 'full_tour_badges') {
+            await Navigator.push<void>(
               context,
-              MaterialPageRoute<String?>(
-                builder: (context) => ContentDetailPage(
-                  item: item,
-                  onboardingFullTourSavedFlow: ftpBefore == OnboardingService.ftSavedList,
-                ),
+              MaterialPageRoute<void>(
+                builder: (_) => const BadgesPage(firstLaunchPreview: false),
               ),
             );
-            await _load();
             if (!mounted) return;
-            if (r == 'full_tour_badges') {
-              await Navigator.push<void>(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (_) => const BadgesPage(firstLaunchPreview: false),
+            await OnboardingService.setGlobalTourStep(
+              OnboardingService.ftFullTourDone,
+            );
+            await _refreshFullTourPhase();
+          }
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF2C2C2E)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(15),
                 ),
-              );
-              if (!mounted) return;
-              await OnboardingService.setFullTourPhase(OnboardingService.ftFullTourDone);
-              await _refreshFullTourPhase();
-            }
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Ink(
-            decoration: BoxDecoration(
-              color: const Color(0xFF1C1C1E),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF2C2C2E)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 10,
-                    child: _savedCardHeroImage(item),
-                  ),
+                child: AspectRatio(
+                  aspectRatio: 16 / 10,
+                  child: _savedCardHeroImage(item),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 12, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _categoryUpper(item),
-                              style: GoogleFonts.notoSans(
-                                color: const Color(0xFF9CA3AF),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.8,
-                              ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 12, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _categoryUpper(item),
+                            style: GoogleFonts.notoSans(
+                              color: const Color(0xFF9CA3AF),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.8,
                             ),
                           ),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.bookmark_rounded, color: accent, size: 22),
-                              const SizedBox(width: 2),
-                              Tooltip(
-                                message: 'Kaydı kaldır',
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () async {
-                                    await SavedItemsService.removeSaved(item.id);
-                                    _load();
-                                  },
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(6),
-                                    child: Icon(
-                                      Icons.delete_outline_rounded,
-                                      color: const Color(0xFF6B7280),
-                                      size: 22,
-                                    ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.bookmark_rounded,
+                              color: accent,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 2),
+                            Tooltip(
+                              message: 'Kaydı kaldır',
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () async {
+                                  await SavedItemsService.removeSaved(item.id);
+                                  _load();
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(6),
+                                  child: Icon(
+                                    Icons.delete_outline_rounded,
+                                    color: const Color(0xFF6B7280),
+                                    size: 22,
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      Text(
-                        item.title,
-                        style: GoogleFonts.newsreader(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          height: 1.25,
-                        ),
-                      ),
-                      if (showSnippet) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          snippet,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.notoSans(
-                            color: const Color(0xFF9CA3AF),
-                            fontSize: 14,
-                            height: 1.45,
-                          ),
+                            ),
+                          ],
                         ),
                       ],
+                    ),
+                    Text(
+                      item.title,
+                      style: GoogleFonts.newsreader(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                    if (showSnippet) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        snippet,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.notoSans(
+                          color: const Color(0xFF9CA3AF),
+                          fontSize: 14,
+                          height: 1.45,
+                        ),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+      ),
     );
     if (tourRowKey != null) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 16),
-        child: KeyedSubtree(
-          key: tourRowKey,
-          child: row,
-        ),
+        child: KeyedSubtree(key: tourRowKey, child: row),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: row,
-    );
+    return Padding(padding: const EdgeInsets.only(bottom: 16), child: row);
   }
 
   Widget _buildFilledList() {
@@ -618,7 +652,9 @@ class _SavedPageState extends State<SavedPage> {
           final item = _itemsById[entry.itemId];
           if (item == null) return const SizedBox.shrink();
           final tourKey =
-              index == 0 && _fullTourPhaseCache == OnboardingService.ftSavedList ? _firstSavedRowTourKey : null;
+              index == 0 && _fullTourPhaseCache == OnboardingService.ftSavedList
+              ? _firstSavedRowTourKey
+              : null;
           return _buildSavedRow(item: item, tourRowKey: tourKey);
         },
       ),
@@ -638,11 +674,13 @@ class _SavedPageState extends State<SavedPage> {
             Expanded(
               child: _loading
                   ? const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF0095FF)),
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF0095FF),
+                      ),
                     )
                   : _entries.isEmpty
-                      ? _buildEmptyScrollable()
-                      : _buildFilledList(),
+                  ? _buildEmptyScrollable()
+                  : _buildFilledList(),
             ),
             if (widget.showBottomBar)
               BottomNavBar(activeIndex: 2, onTabTap: widget.onTabTap),
@@ -651,5 +689,4 @@ class _SavedPageState extends State<SavedPage> {
       ),
     );
   }
-
 }

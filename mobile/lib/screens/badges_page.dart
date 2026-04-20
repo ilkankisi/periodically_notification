@@ -5,8 +5,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 import '../models/gamification_badge.dart';
+import '../models/motivation.dart';
 import '../services/auth_service.dart';
+import '../services/content_sync_service.dart';
+import '../services/daily_action_onboarding_helper.dart';
 import '../services/gamification_service.dart';
+import '../services/motivation_service.dart';
+import '../widgets/add_action_card.dart';
 import '../widgets/app_top_bar.dart';
 import '../widgets/first_badges_back_coach.dart';
 import 'login_page.dart';
@@ -67,6 +72,7 @@ class _BadgesPageState extends State<BadgesPage> {
         'social_10',
         'social_thread',
       },
+      heroQuote: null,
     );
   }
 
@@ -140,14 +146,28 @@ class _BadgesPageState extends State<BadgesPage> {
 
   Future<_BadgeViewModel> _load() async {
     if (!AuthService.isLoggedIn) {
-      return _BadgeViewModel(points: 0, unlocked: {});
+      return _BadgeViewModel(points: 0, unlocked: {}, heroQuote: null);
     }
+    await ContentSyncService.syncFromBackend();
     await GamificationService.syncFromBackend();
     final snap = await GamificationService.readSnapshot();
+    final delivered = await MotivationService.loadDeliveredOnly();
+    final candidates = delivered.isNotEmpty
+        ? delivered
+        : (await MotivationService.loadAll()).take(5).toList();
+    final Motivation? heroQuote = candidates.isEmpty ? null : candidates.first;
     return _BadgeViewModel(
       points: snap.socialPoints,
       unlocked: snap.unlocked,
+      heroQuote: heroQuote,
     );
+  }
+
+  Future<void> _afterActionSavedFromBadgesPage() async {
+    if (!context.mounted) return;
+    await DailyActionOnboardingHelper.afterDailyActionSaved(context);
+    if (!mounted) return;
+    setState(() => _future = _load());
   }
 
   Future<void> _onRefresh() async {
@@ -263,7 +283,7 @@ class _BadgesPageState extends State<BadgesPage> {
             ),
           );
         }
-        final vm = snapshot.data ?? _BadgeViewModel(points: 0, unlocked: {});
+        final vm = snapshot.data ?? _BadgeViewModel(points: 0, unlocked: {}, heroQuote: null);
         final earned = GamificationBadgeDef.catalog.where((b) => vm.unlocked.contains(b.id)).length;
         final total = GamificationBadgeDef.catalog.length;
         final progress = total > 0 ? earned / total : 0.0;
@@ -333,6 +353,37 @@ class _BadgesPageState extends State<BadgesPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
+                if (vm.heroQuote != null) ...[
+                  Text(
+                    'Günün sözü',
+                    style: GoogleFonts.notoSans(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.9,
+                      color: _muted,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '«${vm.heroQuote!.title}»',
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.newsreader(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      height: 1.35,
+                      color: const Color(0xFFE5E5EA),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  AddActionCard(
+                    quoteId: vm.heroQuote!.id,
+                    quoteTitle: vm.heroQuote!.title,
+                    showDescription: true,
+                    onActionSaved: () => unawaited(_afterActionSavedFromBadgesPage()),
+                  ),
+                  const SizedBox(height: 20),
+                ],
                 ...GamificationBadgeDef.catalog.map((b) {
                   final on = vm.unlocked.contains(b.id);
                   return Padding(
@@ -735,9 +786,12 @@ class _BadgeTileFigma extends StatelessWidget {
 class _BadgeViewModel {
   final int points;
   final Set<String> unlocked;
+  /// Anasayfa ile aynı mantık: teslim edilen içerik veya öneri listesinin ilki (aksiyon kartı).
+  final Motivation? heroQuote;
 
   _BadgeViewModel({
     required this.points,
     required this.unlocked,
+    this.heroQuote,
   });
 }

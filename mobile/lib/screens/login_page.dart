@@ -115,7 +115,24 @@ class _LoginPageState extends State<LoginPage> {
     if (err.contains('network')) {
       return 'İnternet bağlantısı gerekli.';
     }
+    if (err.contains('Google Android yapılandırması (SHA-1)')) {
+      final stripped = err.replaceFirst(RegExp(r'^Exception:\s*'), '');
+      return stripped.length < 420 ? stripped : '${stripped.substring(0, 417)}…';
+    }
+    if (err.contains('ApiException: 10') ||
+        err.contains('DEVELOPER_ERROR') ||
+        RegExp(r'ApiException:\s*10\b').hasMatch(err)) {
+      return 'Google girişi bu cihazda yapılandırma hatası veriyor (genelde emülatör). '
+          'Google Cloud Console → Kimlik bilgileri → Android OAuth istemcisine '
+          '`com.siyazilim.periodicallynotification` ve debug keystore SHA-1 ekleyin; '
+          'Google Play’li emülatör görüntüsü kullanın.';
+    }
     if (err.contains('sign_in_failed') || err.contains('invalid_credential')) {
+      if (Platform.isAndroid) {
+        return 'Google ile giriş tamamlanamadı. Emülatörde “Google Play” sistem görüntüsü '
+            'kullanın, Ayarlar’dan bir Google hesabı ekleyin. Geliştirici olarak '
+            'Google Cloud’ta debug SHA-1’in tanımlı olduğundan emin olun.';
+      }
       return 'Giriş başarısız. Lütfen tekrar deneyin.';
     }
     if (err.contains('Geçersiz Google token')) {

@@ -6,8 +6,8 @@ import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 import '../services/onboarding_service.dart';
 
-/// İlk açılış değer önerisinden sonra: günlük aksiyon + zincir (2 adım).
-/// Tur bitince faz günlük aksiyona geçer; rozet önizlemesi zincirin sonunda açılır.
+/// İlk açılış değer önerisinden sonra: günün kartı + zincir (2 adım).
+/// Tur bitince faz ilerler; rozet önizlemesi zincirin sonunda açılır.
 class FirstMissionCoach {
   FirstMissionCoach._();
 
@@ -17,7 +17,7 @@ class FirstMissionCoach {
   /// [onFlowComplete] coach tamamen kapandıktan ve tercih kaydedildikten sonra çağrılır (Geç / son Tamam).
   static void show({
     required BuildContext context,
-    required GlobalKey actionKey,
+    required GlobalKey mainCardKey,
     required GlobalKey zincirKey,
     Future<void> Function(BuildContext context)? onFlowComplete,
   }) {
@@ -124,7 +124,7 @@ class FirstMissionCoach {
     final targets = <TargetFocus>[
       TargetFocus(
         identify: _idAction,
-        keyTarget: actionKey,
+        keyTarget: mainCardKey,
         shape: ShapeLightFocus.RRect,
         radius: 20,
         enableTargetTab: false,
@@ -139,9 +139,9 @@ class FirstMissionCoach {
               return stepCard(
                 controller: controller,
                 step: 1,
-                title: 'Bugün ne yaptığını yaz',
+                title: 'Günün kartını aç',
                 body:
-                    'Motivasyon tek başına yetmez — kısa bir not bırak. İstersen sonra düzenlersin; önemli olan günlük ritmi başlatmak.',
+                    'Aksiyonunu burada değil, sözün içinde yaz: karta dokun, aşağı kaydır ve kısa notunu kaydet.',
                 buttonLabel: 'Sonraki',
               );
             },
@@ -167,7 +167,7 @@ class FirstMissionCoach {
                 step: 2,
                 title: 'Günlük zincir',
                 body:
-                    'Serini ve ilerlemeni buradan takip et. Sonraki adımda günün içeriği kartına dokunarak topluluğa katılacaksın.',
+                    'Serini ve ilerlemeni buradan takip et; sözü açıp yorumlara da buradan devam edebilirsin.',
                 buttonLabel: 'Tamam',
               );
             },
@@ -216,7 +216,7 @@ class FirstMissionCoach {
       onFinish: finishFlow,
       beforeFocus: (target) async {
         if (target.identify == _idAction) {
-          await scrollTargetIntoView(actionKey);
+          await scrollTargetIntoView(mainCardKey);
         } else if (target.identify == _idChain) {
           await scrollTargetIntoView(zincirKey);
         }

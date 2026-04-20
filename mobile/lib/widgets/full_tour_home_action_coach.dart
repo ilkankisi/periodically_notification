@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
-/// Full tur: ana sayfada günlük aksiyon kartına tek adım spotlight.
+/// Full tur: ana sayfada günün içerik kartına tek adım spotlight (aksiyon detayda).
 class FullTourHomeActionCoach {
   FullTourHomeActionCoach._();
 
@@ -10,7 +10,7 @@ class FullTourHomeActionCoach {
 
   static void show({
     required BuildContext context,
-    required GlobalKey actionKey,
+    required GlobalKey targetKey,
   }) {
     final ctx = context;
     const accent = Color(0xFF0095FF);
@@ -63,7 +63,7 @@ class FullTourHomeActionCoach {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Aksiyonunu yaz',
+                  'Aksiyonunu sözün içinde yaz',
                   style: GoogleFonts.newsreader(
                     color: const Color(0xFFE2E2E2),
                     fontSize: 20,
@@ -73,7 +73,7 @@ class FullTourHomeActionCoach {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Bu sözle bugün ne yaptığını kısaca yaz; kaydettiğinde rozet ve puan özetini göreceksin.',
+                  'Önce günün kartına dokun; açılan sayfada aşağı kaydırıp bugün ne yaptığını kaydedebilirsin.',
                   style: GoogleFonts.notoSans(
                     color: muted,
                     fontSize: 14,
@@ -109,7 +109,7 @@ class FullTourHomeActionCoach {
     final targets = <TargetFocus>[
       TargetFocus(
         identify: _idAction,
-        keyTarget: actionKey,
+        keyTarget: targetKey,
         shape: ShapeLightFocus.RRect,
         radius: 20,
         enableTargetTab: false,
@@ -142,7 +142,7 @@ class FullTourHomeActionCoach {
       showSkipInLastTarget: true,
       onSkip: () => true,
       beforeFocus: (target) async {
-        final kc = actionKey.currentContext;
+        final kc = targetKey.currentContext;
         if (kc != null) {
           await Scrollable.ensureVisible(
             kc,

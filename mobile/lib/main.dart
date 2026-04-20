@@ -65,14 +65,23 @@ class _MyAppState extends State<MyApp> {
   Future<void> _loadWidgetData() async {
     appLog('Widget data yükleniyor...');
     try {
-      final title = await HomeWidget.getWidgetData<String>('widget_title', defaultValue: 'Günün İçeriği');
-      final body = await HomeWidget.getWidgetData<String>('widget_body', defaultValue: 'Veri bekleniyor...');
-      final updatedAt = await HomeWidget.getWidgetData<String>('widget_updatedAt', defaultValue: '');
-      
+      final title = await HomeWidget.getWidgetData<String>(
+        'widget_title',
+        defaultValue: 'Günün İçeriği',
+      );
+      final body = await HomeWidget.getWidgetData<String>(
+        'widget_body',
+        defaultValue: 'Veri bekleniyor...',
+      );
+      final updatedAt = await HomeWidget.getWidgetData<String>(
+        'widget_updatedAt',
+        defaultValue: '',
+      );
+
       appLog('Widget title: $title');
       appLog('Widget body: $body');
       appLog('Widget updatedAt: $updatedAt');
-      
+
       setState(() {
         widgetTitle = title ?? 'Günün İçeriği';
         widgetBody = body ?? 'Veri bekleniyor...';
@@ -115,9 +124,7 @@ class _MyAppState extends State<MyApp> {
       appLog('ERROR _MyAppState.build: $e');
       appLog('Stack trace: $st');
       return MaterialApp(
-        home: Scaffold(
-          body: Center(child: Text('Error: $e')),
-        ),
+        home: Scaffold(body: Center(child: Text('Error: $e'))),
       );
     }
   }
@@ -198,7 +205,9 @@ class _MainShellState extends State<_MainShell> {
   void initState() {
     super.initState();
     OnboardingService.registerTabRequestHandler(_onTabTap);
-    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_maybeOpenLoginForFullTour()));
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => unawaited(_maybeOpenLoginForFullTour()),
+    );
   }
 
   @override
@@ -211,13 +220,15 @@ class _MainShellState extends State<_MainShell> {
     if (_loginPushScheduled) return;
     await OnboardingService.ensureFullTourMigrated();
     if (!mounted) return;
-    final phase = await OnboardingService.getFullTourPhase();
+    final phase = await OnboardingService.getGlobalTourStep();
     if (!mounted) return;
     if (phase != OnboardingService.ftNeedLogin) {
       return;
     }
     if (AuthService.isLoggedIn) {
-      await OnboardingService.setFullTourPhase(OnboardingService.ftNeedHomeAction);
+      await OnboardingService.setGlobalTourStep(
+        OnboardingService.ftNeedHomeAction,
+      );
       return;
     }
     _loginPushScheduled = true;
@@ -231,7 +242,9 @@ class _MainShellState extends State<_MainShell> {
     _loginPushScheduled = false;
     if (!mounted) return;
     if (AuthService.isLoggedIn) {
-      await OnboardingService.setFullTourPhase(OnboardingService.ftNeedHomeAction);
+      await OnboardingService.setGlobalTourStep(
+        OnboardingService.ftNeedHomeAction,
+      );
     }
   }
 
@@ -245,10 +258,7 @@ class _MainShellState extends State<_MainShell> {
     final body = IndexedStack(
       index: _currentIndex,
       children: [
-        HomePage(
-          showBottomBar: false,
-          onTabTap: _onTabTap,
-        ),
+        HomePage(showBottomBar: false, onTabTap: _onTabTap),
         ExplorePage(showBottomBar: false, onTabTap: _onTabTap),
         SavedPage(showBottomBar: false, onTabTap: _onTabTap),
         ProfilePage(showBottomBar: false, onTabTap: _onTabTap),
@@ -266,11 +276,22 @@ class _MainShellState extends State<_MainShell> {
               onDestinationSelected: _onTabTap,
               labelType: NavigationRailLabelType.all,
               destinations: _destinations
-                  .map((d) => NavigationRailDestination(
-                        icon: Icon(d.icon, color: const Color(0xFF9CA3AF)),
-                        selectedIcon: Icon(d.icon, color: const Color(0xFF0095FF)),
-                        label: Text(d.label, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                      ))
+                  .map(
+                    (d) => NavigationRailDestination(
+                      icon: Icon(d.icon, color: const Color(0xFF9CA3AF)),
+                      selectedIcon: Icon(
+                        d.icon,
+                        color: const Color(0xFF0095FF),
+                      ),
+                      label: Text(
+                        d.label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
             Expanded(child: body),
@@ -291,4 +312,3 @@ class _MainShellState extends State<_MainShell> {
     setState(() => _currentIndex = index);
   }
 }
-
