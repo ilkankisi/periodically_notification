@@ -183,8 +183,15 @@ class OnboardingService {
   static Future<int> getGlobalTourStep() async {
     await ensureFullTourMigrated();
     final p = await SharedPreferences.getInstance();
-    final step = p.getInt(_keyFullTourV2Phase) ?? ftNeedLogin;
-    return _normalizeTourStep(step);
+    final step = p.getInt(_keyFullTourV2Phase) ?? ftNeedHomeAction;
+    final normalized = _normalizeTourStep(step);
+    // Uygulama yeniden açıldığında da debug döngüsü tetiklensin.
+    if (kDebugRepeatFullTour && normalized >= ftFullTourDone) {
+      final restartStep = _debugLoopStartStep();
+      await p.setInt(_keyFullTourV2Phase, restartStep);
+      return restartStep;
+    }
+    return normalized;
   }
 
   static Future<void> setGlobalTourStep(int step) async {
