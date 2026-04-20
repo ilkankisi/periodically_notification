@@ -57,6 +57,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _firstMissionCoachScheduled = false;
   bool _mainCardCoachScheduled = false;
   bool _fullTourHomeActionScheduled = false;
+  bool _forcedGlobalHomeStepOnce = false;
 
   /// İlk görev coach için hedef widget’lar yüklü ana sayfa iskeleti (içerik henüz yok, arka planda [_load]).
   bool get _coachTargetShellActive =>
@@ -196,10 +197,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     final ftp = await OnboardingService.getGlobalTourStep();
     if (ftp != OnboardingService.ftNeedHomeAction) {
-      if (OnboardingService.kDebugRepeatFullTour) {
-        _tourLog(
-          '_tryScheduleFullTourHomeAction debug_force_home from_step=$ftp',
-        );
+      if (!_forcedGlobalHomeStepOnce) {
+        _forcedGlobalHomeStepOnce = true;
+        _tourLog('_tryScheduleFullTourHomeAction force_home_from_step=$ftp');
         await OnboardingService.setGlobalTourStep(
           OnboardingService.ftNeedHomeAction,
         );
