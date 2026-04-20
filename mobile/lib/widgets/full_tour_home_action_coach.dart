@@ -11,6 +11,7 @@ class FullTourHomeActionCoach {
   static void show({
     required BuildContext context,
     required GlobalKey targetKey,
+    VoidCallback? onFinished,
   }) {
     final ctx = context;
     const accent = Color(0xFF0095FF);
@@ -44,7 +45,10 @@ class FullTourHomeActionCoach {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: accent.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(999),
@@ -88,7 +92,10 @@ class FullTourHomeActionCoach {
                     onPressed: controller.next,
                     style: TextButton.styleFrom(
                       foregroundColor: accent,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                     ),
                     child: Text(
                       'Tamam',
@@ -140,7 +147,11 @@ class FullTourHomeActionCoach {
         fontWeight: FontWeight.w600,
       ),
       showSkipInLastTarget: true,
-      onSkip: () => true,
+      onSkip: () {
+        onFinished?.call();
+        return true;
+      },
+      onFinish: onFinished,
       beforeFocus: (target) async {
         final kc = targetKey.currentContext;
         if (kc != null) {

@@ -12,7 +12,6 @@ import 'screens/explore_page.dart';
 import 'screens/saved_page.dart';
 import 'screens/profile_page.dart';
 import 'screens/value_proposition_onboarding.dart';
-import 'screens/login_page.dart';
 import 'widgets/bottom_nav_bar.dart';
 
 void appLog(String message) {
@@ -192,7 +191,6 @@ class _MainShell extends StatefulWidget {
 
 class _MainShellState extends State<_MainShell> {
   int _currentIndex = 0;
-  bool _loginPushScheduled = false;
 
   static const _destinations = [
     (icon: Icons.home_outlined, label: 'Anasayfa'),
@@ -205,47 +203,12 @@ class _MainShellState extends State<_MainShell> {
   void initState() {
     super.initState();
     OnboardingService.registerTabRequestHandler(_onTabTap);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => unawaited(_maybeOpenLoginForFullTour()),
-    );
   }
 
   @override
   void dispose() {
     OnboardingService.registerTabRequestHandler(null);
     super.dispose();
-  }
-
-  Future<void> _maybeOpenLoginForFullTour() async {
-    if (_loginPushScheduled) return;
-    await OnboardingService.ensureFullTourMigrated();
-    if (!mounted) return;
-    final phase = await OnboardingService.getGlobalTourStep();
-    if (!mounted) return;
-    if (phase != OnboardingService.ftNeedLogin) {
-      return;
-    }
-    if (AuthService.isLoggedIn) {
-      await OnboardingService.setGlobalTourStep(
-        OnboardingService.ftNeedHomeAction,
-      );
-      return;
-    }
-    _loginPushScheduled = true;
-    if (!mounted) return;
-    final nav = Navigator.of(context);
-    await nav.push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (context) => const LoginPage(onboardingFullTour: true),
-      ),
-    );
-    _loginPushScheduled = false;
-    if (!mounted) return;
-    if (AuthService.isLoggedIn) {
-      await OnboardingService.setGlobalTourStep(
-        OnboardingService.ftNeedHomeAction,
-      );
-    }
   }
 
   @override

@@ -1,8 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'auth_service.dart';
-
 /// İlk açılış değer önerisi (App Store 4.2 — ürünün ne olduğu).
 class OnboardingService {
   OnboardingService._();
@@ -62,7 +60,8 @@ class OnboardingService {
   static const bool kDebugRepeatFirstMissionCoach = false;
 
   /// Tur bitince prefs sıfırlanıp yeniden başlatılır (geliştirme).
-  static const bool kDebugRepeatFullTour = false;
+  /// Test bittiğinde false yap.
+  static bool kDebugRepeatFullTour = true;
 
   /// 22 adım için okunabilir envanter (debug/log amacıyla).
   static const List<(int step, String id)> fullTourStepInventory = [
@@ -139,18 +138,14 @@ class OnboardingService {
       return;
     }
 
-    if (AuthService.isLoggedIn) {
-      await p.setInt(_keyFullTourV2Phase, ftNeedHomeAction);
-    } else {
-      await p.setInt(_keyFullTourV2Phase, ftNeedLogin);
-    }
+    await p.setInt(_keyFullTourV2Phase, ftNeedHomeAction);
   }
 
   static int _normalizeTourStep(int raw) {
     // Eski v2 değerlerini (0..7) yeni 22-adım milestone'larına map et.
     switch (raw) {
       case 0:
-        return ftNeedLogin;
+        return ftNeedHomeAction;
       case 1:
         return ftNeedHomeAction;
       case 2:
@@ -173,7 +168,7 @@ class OnboardingService {
   }
 
   static int _debugLoopStartStep() {
-    return AuthService.isLoggedIn ? ftNeedHomeAction : ftNeedLogin;
+    return ftNeedHomeAction;
   }
 
   static Future<void> _applyDebugLoopIfNeeded(

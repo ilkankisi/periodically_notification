@@ -50,6 +50,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// Onboarding v1 zincir fazı ([OnboardingService.getOnboardingV1Phase]); null = henüz senkronize edilmedi.
   int? _v1Phase;
+  int? _globalTourStep;
 
   StreamSubscription<void>? _contentUpdateSub;
 
@@ -108,10 +109,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await OnboardingService.ensureFullTourMigrated();
     final wanted = await OnboardingService.shouldShowFirstMissionCoach();
     final phase = await OnboardingService.getOnboardingV1Phase();
+    final globalStep = await OnboardingService.getGlobalTourStep();
     if (!mounted) return;
     setState(() {
       _firstMissionCoachWanted = wanted;
       _v1Phase = phase;
+      _globalTourStep = globalStep;
     });
     if (wanted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -194,6 +197,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       FullTourHomeActionCoach.show(
         context: homeContext,
         targetKey: _coachMainCardKey,
+        onFinished: () async {
+          await OnboardingService.setGlobalTourStep(
+            OnboardingService.ftExploreIntro,
+          );
+          if (!homeContext.mounted) return;
+          OnboardingService.requestTab(1);
+        },
       );
     });
   }
@@ -1084,7 +1094,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return AbsorbPointer(child: cardBody);
     }
     final attachMainCoachKey =
-        _v1Phase == OnboardingService.v1NeedMainCardCoach;
+        _v1Phase == OnboardingService.v1NeedMainCardCoach ||
+        _globalTourStep == OnboardingService.ftNeedHomeAction;
     return GestureDetector(
       key: attachMainCoachKey ? _coachMainCardKey : null,
       onTap: () =>
