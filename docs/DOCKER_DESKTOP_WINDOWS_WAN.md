@@ -69,7 +69,7 @@ Kalıcı kullanım için aynı satırı `backend` klasöründe bir `.env` dosyas
 MINIO_PUBLIC_URL=http://203.0.113.50/minio
 ```
 
-WAN IP’niz ISP tarafından sık değişiyorsa, her değişimde bu değeri güncelleyip API konteynerini yeniden oluşturmanız gerekir.
+ISP’den **statik (sabit) kamu IPv4** alıyorsanız adres uzun süre değişmez; `MINIO_PUBLIC_URL` ve Flutter `API_BASE_URL` için aynı `http://<kamusal_IP>` tabanını kullanabilirsiniz. IP yine de değişirse `.env` + `docker compose up -d --force-recreate api` ve gerekirse uygulama derlemesini güncellersiniz.
 
 `MINIO_PUBLIC_URL` değiştikten sonra:
 
@@ -199,11 +199,11 @@ API nginx üzerinden **80** ise, uçta port yazmayabilirsiniz:
 ## Kısa kontrol listesi
 
 1. Docker Desktop çalışıyor.
-2. `MINIO_PUBLIC_URL=http://<WAN_IP>/minio` (sonunda `/` yok; port yok).
+2. `MINIO_PUBLIC_URL=http://<kamusal_IP>/minio` (statik IP veya domain; sonunda `/` yok; port yok).
 3. `backend` içinde `docker compose up -d --build`.
 4. Windows güvenlik duvarında **TCP 80** (nginx) açık.
 5. Modemde **TCP 80** → bu PC’nin LAN IP’si, iç port **80**.
-6. Dış test: `http://<WAN_IP>/api/health` ve isteğe bağlı `http://<WAN_IP>/minio/` (AccessDenied olabilir; sorun değil).
+6. Dış test: `http://<kamusal_IP>/api/health` ve isteğe bağlı `http://<kamusal_IP>/minio/` (kökte AccessDenied olabilir; sorun değil).
 
 ---
 
