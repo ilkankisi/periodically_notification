@@ -203,12 +203,18 @@ class _MainShellState extends State<_MainShell> {
   void initState() {
     super.initState();
     OnboardingService.registerTabRequestHandler(_onTabTap);
+    unawaited(_prepareDebugTourStart());
   }
 
   @override
   void dispose() {
     OnboardingService.registerTabRequestHandler(null);
     super.dispose();
+  }
+
+  Future<void> _prepareDebugTourStart() async {
+    if (!OnboardingService.kDebugRepeatFullTour) return;
+    await OnboardingService.resetFullTourForDebug();
   }
 
   @override
