@@ -196,6 +196,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     final ftp = await OnboardingService.getGlobalTourStep();
     if (ftp != OnboardingService.ftNeedHomeAction) {
+      if (OnboardingService.kDebugRepeatFullTour) {
+        _tourLog(
+          '_tryScheduleFullTourHomeAction debug_force_home from_step=$ftp',
+        );
+        await OnboardingService.setGlobalTourStep(
+          OnboardingService.ftNeedHomeAction,
+        );
+        if (!mounted) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_tryScheduleFullTourHomeAction());
+        });
+        return;
+      }
       _tourLog('_tryScheduleFullTourHomeAction skip=wrong_step step=$ftp');
       return;
     }
