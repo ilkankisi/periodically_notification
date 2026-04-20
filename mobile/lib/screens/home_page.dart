@@ -48,10 +48,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// null: SharedPreferences okunmadı; true/false: ilk görev coach gösterilecek mi.
   bool? _firstMissionCoachWanted;
 
-  /// Onboarding v1 zincir fazı ([OnboardingService.getOnboardingV1Phase]); null = henüz senkronize edilmedi.
-  int? _v1Phase;
-  int? _globalTourStep;
-
   StreamSubscription<void>? _contentUpdateSub;
 
   final GlobalKey _coachZincirKey = GlobalKey();
@@ -108,13 +104,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _syncOnboardingStateForBuild() async {
     await OnboardingService.ensureFullTourMigrated();
     final wanted = await OnboardingService.shouldShowFirstMissionCoach();
-    final phase = await OnboardingService.getOnboardingV1Phase();
     final globalStep = await OnboardingService.getGlobalTourStep();
     if (!mounted) return;
     setState(() {
       _firstMissionCoachWanted = wanted;
-      _v1Phase = phase;
-      _globalTourStep = globalStep;
+      if (globalStep == OnboardingService.ftNeedHomeAction) {
+        // Tur döngüde tekrar Home adımına döndüğünde spotlight yeniden açılabilsin.
+        _fullTourHomeActionScheduled = false;
+      }
     });
     if (wanted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -185,15 +182,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await Future<void>.delayed(const Duration(milliseconds: 360));
       if (!homeContext.mounted) return;
       final cardCtx = _coachMainCardKey.currentContext;
-      if (cardCtx != null) {
-        await Scrollable.ensureVisible(
-          cardCtx,
-          duration: const Duration(milliseconds: 420),
-          curve: Curves.easeOutCubic,
-          alignment: 0.15,
-        );
-        if (!homeContext.mounted) return;
+      if (cardCtx == null) {
+        // Hedef henüz mount olmadıysa kilidi açıp tekrar dene.
+        _fullTourHomeActionScheduled = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_tryScheduleFullTourHomeAction());
+        });
+        return;
       }
+      await Scrollable.ensureVisible(
+        cardCtx,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+        alignment: 0.15,
+      );
+      if (!homeContext.mounted) return;
       FullTourHomeActionCoach.show(
         context: homeContext,
         targetKey: _coachMainCardKey,
@@ -294,9 +297,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await OnboardingService.setOnboardingV1Phase(
         OnboardingService.v1NeedComposerCoach,
       );
-      if (mounted) {
-        setState(() => _v1Phase = OnboardingService.v1NeedComposerCoach);
-      }
       openComposerCoach = true;
     } else if (phase == OnboardingService.v1NeedComposerCoach) {
       openComposerCoach = true;
@@ -1093,11 +1093,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (shell) {
       return AbsorbPointer(child: cardBody);
     }
-    final attachMainCoachKey =
-        _v1Phase == OnboardingService.v1NeedMainCardCoach ||
-        _globalTourStep == OnboardingService.ftNeedHomeAction;
     return GestureDetector(
-      key: attachMainCoachKey ? _coachMainCardKey : null,
+      key: _coachMainCardKey,
       onTap: () =>
           unawaited(_pushContentDetailV1Aware(latest, isMainHero: true)),
       child: cardBody,
