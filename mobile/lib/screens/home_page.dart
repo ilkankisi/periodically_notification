@@ -57,6 +57,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _firstMissionCoachScheduled = false;
   bool _mainCardCoachScheduled = false;
   bool _fullTourHomeActionScheduled = false;
+  bool _fullTourHomeIntroShown = false;
   /// Aynı anda birden fazla [unawaited] çağrı yarışmasın (step set tamamlanmadan ikinci okuma).
   bool _fullTourHomeActionRunning = false;
   /// Adım 5 iken spotlight’tan kart açıldı; geri dönünce aynı coach’u yeniden tetikleme.
@@ -128,8 +129,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (!_fullTourHomeCoachOpenedCardAtStep5) {
           _fullTourHomeActionScheduled = false;
         }
+      } else if (globalStep == OnboardingService.tourStep04HomeCardIntro) {
+        _fullTourHomeActionScheduled = false;
       } else {
         _fullTourHomeCoachOpenedCardAtStep5 = false;
+        _fullTourHomeIntroShown = false;
       }
     });
     if (wanted) {
@@ -208,21 +212,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _tourLog('_tryScheduleFullTourHomeAction skip=no_items');
       return;
     }
-    var ftp = await OnboardingService.getGlobalTourStep();
-    if (ftp != OnboardingService.ftNeedHomeAction) {
-      _tourLog('_tryScheduleFullTourHomeAction normalize_from_step=$ftp');
-      await OnboardingService.setGlobalTourStep(
-        OnboardingService.ftNeedHomeAction,
-      );
-      await Future<void>.delayed(Duration.zero);
-      ftp = await OnboardingService.getGlobalTourStep();
-      _tourLog('_tryScheduleFullTourHomeAction after_set step=$ftp');
-      if (ftp != OnboardingService.ftNeedHomeAction) {
-        _tourLog(
-          '_tryScheduleFullTourHomeAction skip=still_wrong_step step=$ftp',
-        );
-        return;
-      }
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.tourStep04HomeCardIntro &&
+        ftp != OnboardingService.ftNeedHomeAction) {
+      _tourLog('_tryScheduleFullTourHomeAction skip=wrong_step step=$ftp');
+      return;
+    }
+    if (!_fullTourHomeIntroShown) {
+      _fullTourHomeIntroShown = true;
+      _tourLog('_tryScheduleFullTourHomeAction show=home_intro_popup');
+      await _showHomeIntroPopup();
+      await OnboardingService.onHomeIntroAcknowledged();
+      if (!mounted) return;
     }
     if (!mounted) {
       _tourLog('_tryScheduleFullTourHomeAction skip=not_mounted_after_await');
@@ -264,6 +265,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         onOpenMainHeroFromHighlight: () async {
           _tourLog('home_coach highlight -> open main hero');
           if (!mounted || items.isEmpty) return;
+          await OnboardingService.onHomeCardTappedToDetail();
           setState(() => _fullTourHomeCoachOpenedCardAtStep5 = true);
           await _pushContentDetailV1Aware(
             items.first,
@@ -271,18 +273,58 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           );
         },
         onCoachDismissedContinueTour: () async {
-          _tourLog('home_coach finished -> explore');
-          await OnboardingService.setGlobalTourStep(
-            OnboardingService.ftExploreIntro,
-          );
-          if (!homeContext.mounted) return;
-          OnboardingService.requestTab(1);
+          _tourLog('home_coach finished_without_tap');
+          _fullTourHomeActionScheduled = false;
         },
       );
     });
     } finally {
       _fullTourHomeActionRunning = false;
     }
+  }
+
+  Future<void> _showHomeIntroPopup() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        const accent = Color(0xFF0095FF);
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1C1C1E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            'Akış başlıyor',
+            style: GoogleFonts.newsreader(
+              color: const Color(0xFFE2E2E2),
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          content: Text(
+            'Adım 5/22\n\nÖnce günün içeriği kartına dokun ve detay sayfasına geç.',
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFF9CA3AF),
+              fontSize: 14,
+              height: 1.45,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              style: TextButton.styleFrom(foregroundColor: accent),
+              child: Text(
+                'Tamam',
+                style: GoogleFonts.notoSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _tryScheduleMainCardCoach() async {

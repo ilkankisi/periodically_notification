@@ -713,9 +713,8 @@ class _ExplorePageState extends State<ExplorePage> {
                     });
                     final ftp = await OnboardingService.getGlobalTourStep();
                     if (ftp == OnboardingService.ftExploreSave && nowSaved) {
-                      await OnboardingService.setGlobalTourStep(
-                        OnboardingService.ftSavedList,
-                      );
+                      final moved = await OnboardingService.onExploreSavedFirstItem();
+                      if (!moved) return;
                       if (mounted) {
                         setState(
                           () => _fullTourPhaseCache =

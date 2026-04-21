@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/comment.dart';
@@ -58,9 +59,15 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
 
   final GlobalKey _commentPointsSpotlightKey = GlobalKey();
   final GlobalKey _onboardingComposerAreaKey = GlobalKey();
+  final GlobalKey _detailReadBodyKey = GlobalKey();
+  final GlobalKey _detailActionCardKey = GlobalKey();
+  final GlobalKey _detailBackButtonKey = GlobalKey();
   bool _commentPointsSpotlightVisible = false;
   int _spotlightEarnedPoints = 0;
   List<String> _spotlightNewBadgeIds = const [];
+  bool _detailReadCoachShown = false;
+  bool _detailActionCoachShown = false;
+  bool _detailBackPopupShown = false;
 
   @override
   void initState() {
@@ -71,6 +78,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     _loadMyAction();
     _commentsSub = CommentService.streamComments(widget.item.id).listen((list) {
       if (mounted) setState(() => _comments = list);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_maybeStartFullTourDetailFlow());
     });
     if (widget.onboardingV1ComposerCoach && AuthService.isLoggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -97,6 +107,23 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         );
       });
     }
+  }
+
+  Future<void> _maybeStartFullTourDetailFlow() async {
+    if (!mounted || _detailReadCoachShown) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftDetailReadIntro) return;
+    _detailReadCoachShown = true;
+    await _showDetailInfoPopup(
+      title: 'İçeriği oku',
+      stepLabel: 'Adım 16/22',
+      body:
+          'Kırmızıyla vurgulanan metin gövdesini okuduktan sonra o alana dokun. Sonraki adımda aksiyonunu yazacaksın.',
+    );
+    if (!mounted) return;
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) return;
+    _showDetailReadBodyCoach();
   }
 
   Future<void> _loadMyAction() async {
@@ -579,7 +606,8 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    onPressed: () => Navigator.pop(context),
+                    key: _detailBackButtonKey,
+                    onPressed: _handleBackPressed,
                     icon: const Icon(
                       Icons.arrow_back_ios_new_rounded,
                       color: Color(0xFFE8E8E8),
@@ -672,6 +700,189 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     );
   }
 
+  Future<void> _showDetailInfoPopup({
+    required String title,
+    required String stepLabel,
+    required String body,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        const accent = Color(0xFF0095FF);
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1C1C1E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.newsreader(
+                    color: const Color(0xFFE2E2E2),
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0x14FFFFFF),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  stepLabel,
+                  style: GoogleFonts.notoSans(
+                    color: const Color(0xFFD1D5DB),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            body,
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFF9CA3AF),
+              fontSize: 14,
+              height: 1.45,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              style: TextButton.styleFrom(foregroundColor: accent),
+              child: Text(
+                'Tamam',
+                style: GoogleFonts.notoSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDetailReadBodyCoach() {
+    var tapped = false;
+    TutorialCoachMark(
+      targets: [
+        TargetFocus(
+          identify: 'detail_read_body',
+          keyTarget: _detailReadBodyKey,
+          shape: ShapeLightFocus.RRect,
+          radius: 10,
+          enableTargetTab: true,
+          enableOverlayTab: false,
+          paddingFocus: 6,
+          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
+          contents: [],
+        ),
+      ],
+      colorShadow: Colors.black,
+      opacityShadow: 0.75,
+      pulseEnable: false,
+      textSkip: 'Geç',
+      onClickTarget: (_) {
+        tapped = true;
+      },
+      onFinish: () {
+        if (tapped) {
+          unawaited(_onDetailReadBodyTapped());
+        }
+      },
+      onSkip: () => true,
+    ).show(context: context);
+  }
+
+  Future<void> _onDetailReadBodyTapped() async {
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftDetailReadIntro) return;
+    final moved = await OnboardingService.onDetailReadBodyTapped();
+    if (!moved) return;
+    if (!mounted || _detailActionCoachShown) return;
+    _detailActionCoachShown = true;
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) return;
+    final actionCtx = _detailActionCardKey.currentContext;
+    if (actionCtx == null || !actionCtx.mounted) return;
+    await Scrollable.ensureVisible(
+      actionCtx,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      alignment: 0.2,
+    );
+    if (!mounted) return;
+    TutorialCoachMark(
+      targets: [
+        TargetFocus(
+          identify: 'detail_action_card',
+          keyTarget: _detailActionCardKey,
+          shape: ShapeLightFocus.RRect,
+          radius: 16,
+          enableTargetTab: false,
+          enableOverlayTab: false,
+          paddingFocus: 8,
+          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
+          contents: [
+            TargetContent(
+              align: ContentAlign.top,
+              padding: const EdgeInsets.only(bottom: 12),
+              builder: (c, controller) => Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1C1E),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF2C2C2E)),
+                ),
+                child: Text(
+                  'Adım 17/22\n\nAksiyonunu yazıp `Aksiyon Ekle` ile kaydet.',
+                  style: GoogleFonts.notoSans(
+                    color: const Color(0xFFE2E2E2),
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+      colorShadow: Colors.black,
+      opacityShadow: 0.75,
+      pulseEnable: false,
+      textSkip: 'Geç',
+      onSkip: () => true,
+    ).show(context: context);
+  }
+
+  Future<void> _onDetailActionSavedForTour() async {
+    final moved = await OnboardingService.onDetailActionSaved();
+    if (!moved || !mounted || _detailBackPopupShown) return;
+    _detailBackPopupShown = true;
+    await _showDetailInfoPopup(
+      title: 'Son adım',
+      stepLabel: 'Adım 18/22',
+      body:
+          'Aksiyon kaydedildi. Şimdi sol üstteki geri oka dokunarak bu adımı tamamla.',
+    );
+  }
+
+  Future<void> _handleBackPressed() async {
+    final moved = await OnboardingService.onDetailBackConfirmedToExplore();
+    if (!mounted) return;
+    Navigator.pop(context);
+    if (moved) {
+      OnboardingService.requestTab(1);
+    }
+  }
+
   Widget _buildSaveLibraryCard() {
     return Material(
       color: Colors.transparent,
@@ -737,6 +948,25 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReadableBodyText(String text) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: _onDetailReadBodyTapped,
+      child: KeyedSubtree(
+        key: _detailReadBodyKey,
+        child: Text(
+          text,
+          style: GoogleFonts.notoSans(
+            fontSize: 17,
+            fontWeight: FontWeight.w400,
+            height: 1.55,
+            color: const Color(0xFFE5E7EB),
           ),
         ),
       ),
@@ -909,40 +1139,29 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                             ),
                           ),
                           _buildInDepthDivider(),
-                          Text(
-                            bodyParts.$2,
-                            style: GoogleFonts.notoSans(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w400,
-                              height: 1.55,
-                              color: const Color(0xFFE5E7EB),
-                            ),
-                          ),
+                          _buildReadableBodyText(bodyParts.$2),
                         ] else ...[
                           _buildInDepthDivider(),
-                          Text(
-                            bodyParts.$2,
-                            style: GoogleFonts.notoSans(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w400,
-                              height: 1.55,
-                              color: const Color(0xFFE5E7EB),
-                            ),
-                          ),
+                          _buildReadableBodyText(bodyParts.$2),
                         ],
                         const SizedBox(height: 28),
                         _buildSaveLibraryCard(),
                         const SizedBox(height: 20),
-                        AddActionCard(
-                          quoteId: widget.item.id,
-                          quoteTitle: widget.item.title,
-                          onActionSaved: () async {
-                            await _loadMyAction();
-                            if (!context.mounted) return;
-                            await DailyActionOnboardingHelper.afterDailyActionSaved(
-                              context,
-                            );
-                          },
+                        KeyedSubtree(
+                          key: _detailActionCardKey,
+                          child: AddActionCard(
+                            quoteId: widget.item.id,
+                            quoteTitle: widget.item.title,
+                            onActionSaved: () async {
+                              await _loadMyAction();
+                              if (!context.mounted) return;
+                              await _onDetailActionSavedForTour();
+                              if (!context.mounted) return;
+                              await DailyActionOnboardingHelper.afterDailyActionSaved(
+                                context,
+                              );
+                            },
+                          ),
                         ),
                         if (_myAction != null) ...[
                           const SizedBox(height: 24),

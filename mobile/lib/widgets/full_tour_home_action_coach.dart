@@ -77,7 +77,7 @@ class FullTourHomeActionCoach {
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        'Adım 6/22',
+                        'Adım 5/22',
                         style: GoogleFonts.notoSans(
                           color: const Color(0xFFD1D5DB),
                           fontSize: 11,

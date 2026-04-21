@@ -479,9 +479,7 @@ class _SavedPageState extends State<SavedPage> {
         onTap: () async {
           final ftpBefore = await OnboardingService.getGlobalTourStep();
           if (ftpBefore == OnboardingService.ftSavedList) {
-            await OnboardingService.setGlobalTourStep(
-              OnboardingService.ftSavedComment,
-            );
+            await OnboardingService.onSavedItemOpened();
           }
           if (!mounted) return;
           final r = await Navigator.push<String?>(

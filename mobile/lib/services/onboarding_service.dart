@@ -55,7 +55,9 @@ class OnboardingService {
   static const int ftExploreIntro = tourStep08ExploreIntro;
   static const int ftExploreSave = tourStep10ExploreSaveIntro;
   static const int ftSavedList = tourStep14SavedFirstItem;
+  static const int ftDetailReadIntro = tourStep16DetailHeroIntro;
   static const int ftSavedComment = tourStep17DetailCommentComposer;
+  static const int ftDetailBackToHome = tourStep18DetailSendComment;
   static const int ftBadgesAfterTourComment = tourStep20BadgesAfterComment;
   static const int ftFullTourDone = tourDone;
 
@@ -228,6 +230,65 @@ class OnboardingService {
 
   static Future<void> setFullTourPhase(int phase) async {
     await setGlobalTourStep(phase);
+  }
+
+  static Future<bool> moveToStepIfCurrent({
+    required int expectedCurrent,
+    required int nextStep,
+  }) async {
+    final current = await getGlobalTourStep();
+    if (current != expectedCurrent) return false;
+    await setGlobalTourStep(nextStep);
+    return true;
+  }
+
+  static Future<bool> onHomeIntroAcknowledged() {
+    return moveToStepIfCurrent(
+      expectedCurrent: tourStep04HomeCardIntro,
+      nextStep: ftNeedHomeAction,
+    );
+  }
+
+  static Future<bool> onHomeCardTappedToDetail() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftNeedHomeAction,
+      nextStep: ftDetailReadIntro,
+    );
+  }
+
+  static Future<bool> onDetailReadBodyTapped() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftDetailReadIntro,
+      nextStep: ftDetailReadIntro,
+    );
+  }
+
+  static Future<bool> onDetailActionSaved() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftDetailReadIntro,
+      nextStep: ftDetailBackToHome,
+    );
+  }
+
+  static Future<bool> onDetailBackConfirmedToExplore() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftDetailBackToHome,
+      nextStep: ftExploreIntro,
+    );
+  }
+
+  static Future<bool> onExploreSavedFirstItem() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftExploreSave,
+      nextStep: ftSavedList,
+    );
+  }
+
+  static Future<bool> onSavedItemOpened() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftSavedList,
+      nextStep: ftSavedComment,
+    );
   }
 
   static Future<void> _markLegacyV1DoneForMigration(SharedPreferences p) async {
