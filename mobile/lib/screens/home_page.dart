@@ -57,7 +57,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _firstMissionCoachScheduled = false;
   bool _mainCardCoachScheduled = false;
   bool _fullTourHomeActionScheduled = false;
-  bool _forcedGlobalHomeStepOnce = false;
+  /// Aynı anda birden fazla [unawaited] çağrı yarışmasın (step set tamamlanmadan ikinci okuma).
+  bool _fullTourHomeActionRunning = false;
 
   /// İlk görev coach için hedef widget’lar yüklü ana sayfa iskeleti (içerik henüz yok, arka planda [_load]).
   bool get _coachTargetShellActive =>
@@ -183,6 +184,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _tryScheduleFullTourHomeAction() async {
+    if (_fullTourHomeActionRunning) {
+      _tourLog('_tryScheduleFullTourHomeAction skip=busy');
+      return;
+    }
+    _fullTourHomeActionRunning = true;
+    try {
     if (_fullTourHomeActionScheduled) {
       _tourLog('_tryScheduleFullTourHomeAction skip=already_scheduled');
       return;
@@ -195,22 +202,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _tourLog('_tryScheduleFullTourHomeAction skip=no_items');
       return;
     }
-    final ftp = await OnboardingService.getGlobalTourStep();
+    var ftp = await OnboardingService.getGlobalTourStep();
     if (ftp != OnboardingService.ftNeedHomeAction) {
-      if (!_forcedGlobalHomeStepOnce) {
-        _forcedGlobalHomeStepOnce = true;
-        _tourLog('_tryScheduleFullTourHomeAction force_home_from_step=$ftp');
-        await OnboardingService.setGlobalTourStep(
-          OnboardingService.ftNeedHomeAction,
+      _tourLog('_tryScheduleFullTourHomeAction normalize_from_step=$ftp');
+      await OnboardingService.setGlobalTourStep(
+        OnboardingService.ftNeedHomeAction,
+      );
+      await Future<void>.delayed(Duration.zero);
+      ftp = await OnboardingService.getGlobalTourStep();
+      _tourLog('_tryScheduleFullTourHomeAction after_set step=$ftp');
+      if (ftp != OnboardingService.ftNeedHomeAction) {
+        _tourLog(
+          '_tryScheduleFullTourHomeAction skip=still_wrong_step step=$ftp',
         );
-        if (!mounted) return;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) unawaited(_tryScheduleFullTourHomeAction());
-        });
         return;
       }
-      _tourLog('_tryScheduleFullTourHomeAction skip=wrong_step step=$ftp');
-      return;
     }
     if (!mounted) {
       _tourLog('_tryScheduleFullTourHomeAction skip=not_mounted_after_await');
@@ -259,6 +265,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         },
       );
     });
+    } finally {
+      _fullTourHomeActionRunning = false;
+    }
   }
 
   Future<void> _tryScheduleMainCardCoach() async {

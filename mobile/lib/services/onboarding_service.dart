@@ -11,6 +11,9 @@ class OnboardingService {
   static const _keyV1ChainPhase = 'onboarding_v1_chain_phase';
   static const _keyFullTourV2Phase = 'onboarding_full_tour_v2_phase';
 
+  /// 0..22 ham adım; eski [0..7] compact v2 ile çakışmayı önlemek için ayrı anahtar.
+  static const _keyFullTourV4Step = 'onboarding_full_tour_v4_step';
+
   /// Eski v1: İlk görev → günlük aksiyon → kart → yorum → puan → rozetler zinciri.
   /// [v1ChainDone] tamamlandı (veya eski kullanıcı migrasyonu).
   static const int v1NeedMissionCoach = 0;
@@ -122,27 +125,34 @@ class OnboardingService {
 
   static Future<void> ensureFullTourMigrated() async {
     final p = await SharedPreferences.getInstance();
+    if (p.containsKey(_keyFullTourV4Step)) {
+      return;
+    }
+
     if (p.containsKey(_keyFullTourV2Phase)) {
-      final raw = p.getInt(_keyFullTourV2Phase) ?? ftNeedLogin;
-      final normalized = _normalizeTourStep(raw);
-      if (normalized != raw) {
-        await p.setInt(_keyFullTourV2Phase, normalized);
-      }
+      final raw = p.getInt(_keyFullTourV2Phase) ?? 0;
+      final migrated = _migrateLegacyCompactOrKeepFull(raw);
+      await p.setInt(_keyFullTourV4Step, migrated);
       return;
     }
 
     final v1Stored = p.getInt(_keyV1ChainPhase);
     final v1Done = v1Stored != null && v1Stored >= v1ChainDone;
     if (v1Done) {
-      await p.setInt(_keyFullTourV2Phase, ftFullTourDone);
+      await p.setInt(_keyFullTourV4Step, ftFullTourDone);
       return;
     }
 
-    await p.setInt(_keyFullTourV2Phase, ftNeedHomeAction);
+    await p.setInt(_keyFullTourV4Step, ftNeedHomeAction);
   }
 
-  static int _normalizeTourStep(int raw) {
-    // Eski v2 değerlerini (0..7) yeni 22-adım milestone'larına map et.
+  /// Eski tek-bayt v2 (0..7) → 22 adım. 8..22 ise zaten geniş adım kabul edilir.
+  static int _migrateLegacyCompactOrKeepFull(int raw) {
+    if (raw < 0) return ftNeedHomeAction;
+    if (raw > ftFullTourDone) return ftFullTourDone;
+    if (raw > 7) {
+      return raw;
+    }
     switch (raw) {
       case 0:
         return ftNeedHomeAction;
@@ -161,9 +171,7 @@ class OnboardingService {
       case 7:
         return ftFullTourDone;
       default:
-        if (raw < 0) return ftNeedLogin;
-        if (raw > ftFullTourDone) return ftFullTourDone;
-        return raw;
+        return ftNeedHomeAction;
     }
   }
 
@@ -177,31 +185,32 @@ class OnboardingService {
   ) async {
     if (!kDebugRepeatFullTour) return;
     if (step < ftFullTourDone) return;
-    await p.setInt(_keyFullTourV2Phase, _debugLoopStartStep());
+    await p.setInt(_keyFullTourV4Step, _debugLoopStartStep());
   }
 
   static Future<int> getGlobalTourStep() async {
     await ensureFullTourMigrated();
     final p = await SharedPreferences.getInstance();
-    final step = p.getInt(_keyFullTourV2Phase) ?? ftNeedHomeAction;
-    final normalized = _normalizeTourStep(step);
+    final step = p.getInt(_keyFullTourV4Step) ?? ftNeedHomeAction;
+    var out = step.clamp(0, ftFullTourDone);
     // Uygulama yeniden açıldığında da debug döngüsü tetiklensin.
-    if (kDebugRepeatFullTour && normalized >= ftFullTourDone) {
+    if (kDebugRepeatFullTour && out >= ftFullTourDone) {
       final restartStep = _debugLoopStartStep();
-      await p.setInt(_keyFullTourV2Phase, restartStep);
+      await p.setInt(_keyFullTourV4Step, restartStep);
       return restartStep;
     }
-    return normalized;
+    return out;
   }
 
   static Future<void> setGlobalTourStep(int step) async {
+    await ensureFullTourMigrated();
     final p = await SharedPreferences.getInstance();
-    final normalized = _normalizeTourStep(step);
-    await p.setInt(_keyFullTourV2Phase, normalized);
-    if (normalized >= ftFullTourDone) {
+    final clamped = step.clamp(0, ftFullTourDone);
+    await p.setInt(_keyFullTourV4Step, clamped);
+    if (clamped >= ftFullTourDone) {
       await _markLegacyV1DoneForMigration(p);
     }
-    await _applyDebugLoopIfNeeded(p, normalized);
+    await _applyDebugLoopIfNeeded(p, clamped);
   }
 
   static Future<void> advanceGlobalTourStep({
@@ -229,7 +238,7 @@ class OnboardingService {
 
   static Future<void> resetFullTourForDebug() async {
     final p = await SharedPreferences.getInstance();
-    await p.setInt(_keyFullTourV2Phase, _debugLoopStartStep());
+    await p.setInt(_keyFullTourV4Step, _debugLoopStartStep());
   }
 
   /// Legacy v1 coach’ları (ilk görev / ana kart / eski detay zinciri) full tur bitene kadar kapalı.
