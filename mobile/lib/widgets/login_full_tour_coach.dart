@@ -8,11 +8,13 @@ import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 class LoginFullTourCoach {
   LoginFullTourCoach._();
 
+  static const Object _idIntro = 'login_intro';
   static const Object _idGoogle = 'login_google';
   static const Object _idApple = 'login_apple';
 
   static void show({
     required BuildContext context,
+    required GlobalKey introTitleKey,
     required GlobalKey googleKey,
     GlobalKey? appleKey,
   }) {
@@ -26,6 +28,7 @@ class LoginFullTourCoach {
       TutorialCoachMarkController controller, {
       required String title,
       required String body,
+      required String stepLabel,
     }) {
       return ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 320),
@@ -64,6 +67,23 @@ class LoginFullTourCoach {
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.4,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0x14FFFFFF),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        stepLabel,
+                        style: GoogleFonts.notoSans(
+                          color: const Color(0xFFD1D5DB),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
                         ),
                       ),
                     ),
@@ -116,6 +136,31 @@ class LoginFullTourCoach {
 
     final targets = <TargetFocus>[];
 
+    targets.add(
+      TargetFocus(
+        identify: _idIntro,
+        keyTarget: introTitleKey,
+        shape: ShapeLightFocus.RRect,
+        radius: 12,
+        enableTargetTab: false,
+        enableOverlayTab: false,
+        paddingFocus: 8,
+        borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
+        contents: [
+          TargetContent(
+            align: ContentAlign.bottom,
+            padding: const EdgeInsets.only(top: 14),
+            builder: (c, controller) => infoCard(
+              controller,
+              title: 'Tura hoş geldin',
+              body: 'Önce giriş yapıp turu başlatıyoruz. Sonrasında anasayfada günlük aksiyon adımına geçeceksin.',
+              stepLabel: 'Adım 1/22',
+            ),
+          ),
+        ],
+      ),
+    );
+
     if (Platform.isIOS || Platform.isMacOS) {
       if (appleKey != null) {
         targets.add(
@@ -136,6 +181,7 @@ class LoginFullTourCoach {
                   controller,
                   title: 'Apple ile devam',
                   body: 'Apple hesabınla giriş yaparak günlük aksiyonunu paylaşabilirsin.',
+                  stepLabel: 'Adım 2/22',
                 ),
               ),
             ],
@@ -164,6 +210,7 @@ class LoginFullTourCoach {
               body: Platform.isAndroid
                   ? 'Google hesabınla giriş yap; ardından ana sayfada bugünkü aksiyonunu yazacaksın.'
                   : 'İstersen Google hesabınla da giriş yapabilirsin.',
+              stepLabel: Platform.isAndroid ? 'Adım 2/22' : 'Adım 3/22',
             ),
           ),
         ],
@@ -187,7 +234,9 @@ class LoginFullTourCoach {
       onSkip: () => true,
       beforeFocus: (target) async {
         GlobalKey gk = googleKey;
-        if (target.identify == _idApple) {
+        if (target.identify == _idIntro) {
+          gk = introTitleKey;
+        } else if (target.identify == _idApple) {
           final ak = appleKey;
           if (ak != null) gk = ak;
         }

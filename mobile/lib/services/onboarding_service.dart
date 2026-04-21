@@ -176,7 +176,7 @@ class OnboardingService {
   }
 
   static int _debugLoopStartStep() {
-    return ftNeedHomeAction;
+    return ftNeedLogin;
   }
 
   static Future<void> _applyDebugLoopIfNeeded(

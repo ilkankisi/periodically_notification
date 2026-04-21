@@ -35,6 +35,7 @@ class _LoginPageState extends State<LoginPage> {
 
   final GlobalKey _googleSignInKey = GlobalKey();
   final GlobalKey _appleSignInKey = GlobalKey();
+  final GlobalKey _loginTitleKey = GlobalKey();
   bool _fullTourCoachScheduled = false;
 
   static const Color _bg = Color(0xFF131313);
@@ -103,6 +104,7 @@ class _LoginPageState extends State<LoginPage> {
     final appleKey = (Platform.isIOS || Platform.isMacOS) ? _appleSignInKey : null;
     LoginFullTourCoach.show(
       context: context,
+      introTitleKey: _loginTitleKey,
       googleKey: _googleSignInKey,
       appleKey: appleKey,
     );
@@ -191,14 +193,17 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    Text(
-                      'Giriş yap',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.newsreader(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w700,
-                        height: 1.15,
-                        color: Colors.white,
+                    KeyedSubtree(
+                      key: _loginTitleKey,
+                      child: Text(
+                        'Giriş yap',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.newsreader(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w700,
+                          height: 1.15,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),

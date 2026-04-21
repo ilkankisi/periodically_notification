@@ -69,6 +69,23 @@ class FullTourHomeActionCoach {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0x14FFFFFF),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        'Adım 6/22',
+                        style: GoogleFonts.notoSans(
+                          color: const Color(0xFFD1D5DB),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
