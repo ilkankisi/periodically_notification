@@ -1001,8 +1001,6 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     Navigator.pop(context);
     if (moved) {
       OnboardingService.requestTab(0);
-      await Future<void>.delayed(const Duration(milliseconds: 450));
-      OnboardingService.requestTab(3);
     }
   }
 
