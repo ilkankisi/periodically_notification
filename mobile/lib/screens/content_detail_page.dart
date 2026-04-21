@@ -869,11 +869,65 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     if (!moved || !mounted || _detailBackPopupShown) return;
     _detailBackPopupShown = true;
     await _showDetailInfoPopup(
-      title: 'Son adım',
+      title: 'Anasayfaya dön',
       stepLabel: 'Adım 18/22',
       body:
-          'Aksiyon kaydedildi. Şimdi sol üstteki geri oka dokunarak bu adımı tamamla.',
+          'Aksiyon kaydedildi. Şimdi sol üstteki geri oka basıp Anasayfa ekranına dön.',
     );
+    if (!mounted) return;
+    _showBackButtonSpotlight();
+  }
+
+  void _showBackButtonSpotlight() {
+    var tapped = false;
+    TutorialCoachMark(
+      targets: [
+        TargetFocus(
+          identify: 'detail_back_button',
+          keyTarget: _detailBackButtonKey,
+          shape: ShapeLightFocus.Circle,
+          enableTargetTab: true,
+          enableOverlayTab: false,
+          paddingFocus: 8,
+          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
+          contents: [
+            TargetContent(
+              align: ContentAlign.bottom,
+              padding: const EdgeInsets.only(top: 10),
+              builder: (c, controller) => Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1C1E),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2C2C2E)),
+                ),
+                child: Text(
+                  'Bu geri oka basıp anasayfaya dön.',
+                  style: GoogleFonts.notoSans(
+                    color: const Color(0xFFE2E2E2),
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+      colorShadow: Colors.black,
+      opacityShadow: 0.75,
+      pulseEnable: false,
+      textSkip: 'Geç',
+      onClickTarget: (_) {
+        tapped = true;
+      },
+      onFinish: () {
+        if (tapped) {
+          unawaited(_handleBackPressed());
+        }
+      },
+      onSkip: () => true,
+    ).show(context: context);
   }
 
   Future<void> _maybeShowActionButtonSpotlight(String value) async {
