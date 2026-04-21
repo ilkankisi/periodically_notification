@@ -58,6 +58,7 @@ class OnboardingService {
   static const int ftDetailReadIntro = tourStep16DetailHeroIntro;
   static const int ftSavedComment = tourStep17DetailCommentComposer;
   static const int ftDetailBackToHome = tourStep18DetailSendComment;
+  static const int ftProfileSpotlight = tourStep21FinalInfo;
   static const int ftBadgesAfterTourComment = tourStep20BadgesAfterComment;
   static const int ftFullTourDone = tourDone;
 
@@ -287,6 +288,13 @@ class OnboardingService {
     return moveToStepIfCurrent(
       expectedCurrent: ftDetailBackToHome,
       nextStep: ftExploreIntro,
+    );
+  }
+
+  static Future<bool> onDetailBackConfirmedToProfile() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftDetailBackToHome,
+      nextStep: ftProfileSpotlight,
     );
   }
 

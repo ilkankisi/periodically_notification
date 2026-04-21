@@ -930,11 +930,13 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   }
 
   Future<void> _handleBackPressed() async {
-    final moved = await OnboardingService.onDetailBackConfirmedToExplore();
+    final moved = await OnboardingService.onDetailBackConfirmedToProfile();
     if (!mounted) return;
     Navigator.pop(context);
     if (moved) {
-      OnboardingService.requestTab(1);
+      OnboardingService.requestTab(0);
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      OnboardingService.requestTab(3);
     }
   }
 

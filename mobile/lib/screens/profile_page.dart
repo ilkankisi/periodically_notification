@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 import '../services/auth_service.dart';
 import '../services/gamification_service.dart';
 import '../services/notification_badge_controller.dart';
+import '../services/onboarding_service.dart';
 import '../services/profile_service.dart';
 import '../widgets/app_top_bar.dart';
 import '../widgets/bottom_nav_bar.dart';
@@ -38,6 +41,8 @@ class _ProfilePageState extends State<ProfilePage> {
   String? _authPhotoUrl;
   bool _isLoggedIn = false;
   GamificationSnapshot? _gamification;
+  final GlobalKey _profileHeroTourKey = GlobalKey();
+  bool _profileTourScheduled = false;
 
   @override
   void initState() {
@@ -46,6 +51,9 @@ class _ProfilePageState extends State<ProfilePage> {
     _updateAuthState();
     AuthService.authStateChanges.listen((_) => _updateAuthState());
     GamificationService.onStateChanged.addListener(_onGamificationChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_maybeShowProfileTourSpotlight());
+    });
   }
 
   @override
@@ -108,6 +116,65 @@ class _ProfilePageState extends State<ProfilePage> {
       }
       _profileImagePath = imagePath;
       _gamification = AuthService.isLoggedIn ? gam : null;
+    });
+    unawaited(_maybeShowProfileTourSpotlight());
+  }
+
+  Future<void> _maybeShowProfileTourSpotlight() async {
+    if (!mounted || _profileTourScheduled || !_isLoggedIn) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftProfileSpotlight) return;
+    _profileTourScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 280));
+      if (!mounted) return;
+      TutorialCoachMark(
+        targets: [
+          TargetFocus(
+            identify: 'profile_hero_spotlight',
+            keyTarget: _profileHeroTourKey,
+            shape: ShapeLightFocus.RRect,
+            radius: 20,
+            enableTargetTab: false,
+            enableOverlayTab: false,
+            paddingFocus: 8,
+            borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
+            contents: [
+              TargetContent(
+                align: ContentAlign.bottom,
+                padding: const EdgeInsets.only(top: 14),
+                builder: (c, controller) => Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1C1C1E),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: Text(
+                    'Adım 22/22\n\nProfil sayfasına geldin. Tur tamamlandı.',
+                    style: GoogleFonts.notoSans(
+                      color: const Color(0xFFE2E2E2),
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        colorShadow: Colors.black,
+        opacityShadow: 0.78,
+        pulseEnable: false,
+        textSkip: 'Geç',
+        onSkip: () {
+          unawaited(OnboardingService.setGlobalTourStep(OnboardingService.ftFullTourDone));
+          return true;
+        },
+        onFinish: () {
+          unawaited(OnboardingService.setGlobalTourStep(OnboardingService.ftFullTourDone));
+        },
+      ).show(context: context);
     });
   }
 
@@ -279,9 +346,11 @@ class _ProfilePageState extends State<ProfilePage> {
     final showLocalPhoto = !showAuthPhoto && _profileImagePath != null && File(_profileImagePath!).existsSync();
     final name = _displayName?.trim().isNotEmpty == true ? _displayName! : 'Kullanıcı';
 
-    return SizedBox(
-      height: 204,
-      child: Stack(
+    return KeyedSubtree(
+      key: _profileHeroTourKey,
+      child: SizedBox(
+        height: 204,
+        child: Stack(
         alignment: Alignment.topCenter,
         children: [
           Positioned(
@@ -394,6 +463,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
