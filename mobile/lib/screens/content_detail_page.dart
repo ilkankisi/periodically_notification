@@ -56,6 +56,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   Comment? _replyTo;
   String? _reactingCommentId;
   bool _commentsNewestFirst = true;
+  final ScrollController _detailScrollController = ScrollController();
 
   final GlobalKey _commentPointsSpotlightKey = GlobalKey();
   final GlobalKey _onboardingComposerAreaKey = GlobalKey();
@@ -143,6 +144,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   void dispose() {
     _commentsSub?.cancel();
     _commentController.dispose();
+    _detailScrollController.dispose();
     super.dispose();
   }
 
@@ -875,10 +877,20 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           'Aksiyon kaydedildi. Şimdi sol üstteki geri oka basıp Anasayfa ekranına dön.',
     );
     if (!mounted) return;
-    _showBackButtonSpotlight();
+    unawaited(_showBackButtonSpotlight());
   }
 
-  void _showBackButtonSpotlight() {
+  Future<void> _showBackButtonSpotlight() async {
+    if (_detailScrollController.hasClients) {
+      await _detailScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (!mounted) return;
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted || _detailBackButtonKey.currentContext == null) return;
     var tapped = false;
     TutorialCoachMark(
       targets: [
@@ -1099,6 +1111,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         children: [
           Expanded(
             child: SingleChildScrollView(
+              controller: _detailScrollController,
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
