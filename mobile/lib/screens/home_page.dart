@@ -59,6 +59,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _fullTourHomeActionScheduled = false;
   /// Aynı anda birden fazla [unawaited] çağrı yarışmasın (step set tamamlanmadan ikinci okuma).
   bool _fullTourHomeActionRunning = false;
+  /// Adım 5 iken spotlight’tan kart açıldı; geri dönünce aynı coach’u yeniden tetikleme.
+  bool _fullTourHomeCoachOpenedCardAtStep5 = false;
 
   /// İlk görev coach için hedef widget’lar yüklü ana sayfa iskeleti (içerik henüz yok, arka planda [_load]).
   bool get _coachTargetShellActive =>
@@ -123,7 +125,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _firstMissionCoachWanted = wanted;
       if (globalStep == OnboardingService.ftNeedHomeAction) {
         // Tur döngüde tekrar Home adımına döndüğünde spotlight yeniden açılabilsin.
-        _fullTourHomeActionScheduled = false;
+        if (!_fullTourHomeCoachOpenedCardAtStep5) {
+          _fullTourHomeActionScheduled = false;
+        }
+      } else {
+        _fullTourHomeCoachOpenedCardAtStep5 = false;
       }
     });
     if (wanted) {
@@ -255,7 +261,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       FullTourHomeActionCoach.show(
         context: homeContext,
         targetKey: _coachMainCardKey,
-        onFinished: () async {
+        onOpenMainHeroFromHighlight: () async {
+          _tourLog('home_coach highlight -> open main hero');
+          if (!mounted || items.isEmpty) return;
+          setState(() => _fullTourHomeCoachOpenedCardAtStep5 = true);
+          await _pushContentDetailV1Aware(
+            items.first,
+            isMainHero: true,
+          );
+        },
+        onCoachDismissedContinueTour: () async {
           _tourLog('home_coach finished -> explore');
           await OnboardingService.setGlobalTourStep(
             OnboardingService.ftExploreIntro,

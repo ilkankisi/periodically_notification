@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
@@ -8,10 +10,14 @@ class FullTourHomeActionCoach {
 
   static const Object _idAction = 'full_tour_home_action';
 
+  /// [onOpenMainHeroFromHighlight]: Delik içine dokununca — overlay kartın üstünde
+  /// olduğu için gerçek [GestureDetector] çalışmaz; aynı navigasyonu burada verin.
+  /// [onCoachDismissedContinueTour]: «Tamam» / «Geç» ile kapanınca (Keşfet adımı vb.).
   static void show({
     required BuildContext context,
     required GlobalKey targetKey,
-    VoidCallback? onFinished,
+    required Future<void> Function() onOpenMainHeroFromHighlight,
+    required Future<void> Function() onCoachDismissedContinueTour,
   }) {
     final ctx = context;
     const accent = Color(0xFF0095FF);
@@ -113,13 +119,15 @@ class FullTourHomeActionCoach {
       );
     }
 
+    var openedFromHighlight = false;
+
     final targets = <TargetFocus>[
       TargetFocus(
         identify: _idAction,
         keyTarget: targetKey,
         shape: ShapeLightFocus.RRect,
         radius: 20,
-        enableTargetTab: false,
+        enableTargetTab: true,
         enableOverlayTab: false,
         paddingFocus: 12,
         borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
@@ -147,11 +155,25 @@ class FullTourHomeActionCoach {
         fontWeight: FontWeight.w600,
       ),
       showSkipInLastTarget: true,
+      onClickTarget: (_) {
+        openedFromHighlight = true;
+      },
       onSkip: () {
-        onFinished?.call();
+        openedFromHighlight = false;
+        unawaited(onCoachDismissedContinueTour());
         return true;
       },
-      onFinish: onFinished,
+      onFinish: () {
+        final fromHighlight = openedFromHighlight;
+        openedFromHighlight = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (fromHighlight) {
+            unawaited(onOpenMainHeroFromHighlight());
+          } else {
+            unawaited(onCoachDismissedContinueTour());
+          }
+        });
+      },
       beforeFocus: (target) async {
         final kc = targetKey.currentContext;
         if (kc != null) {
