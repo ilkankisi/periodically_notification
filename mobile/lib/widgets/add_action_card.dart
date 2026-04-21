@@ -19,6 +19,10 @@ class AddActionCard extends StatefulWidget {
   final String? hintText;
   /// false: açıklama paragrafını gizler (anasayfa kompakt kart).
   final bool showDescription;
+  /// Tour/coach için aksiyon butonu hedef anahtarı.
+  final GlobalKey? actionButtonKey;
+  /// Kullanıcı metni değiştikçe haber verir (tour tetikleme vb.).
+  final ValueChanged<String>? onNoteChanged;
 
   const AddActionCard({
     super.key,
@@ -28,6 +32,8 @@ class AddActionCard extends StatefulWidget {
     this.titleText,
     this.hintText,
     this.showDescription = true,
+    this.actionButtonKey,
+    this.onNoteChanged,
   });
 
   @override
@@ -55,6 +61,7 @@ class _AddActionCardState extends State<AddActionCard> {
         MaterialPageRoute(
           builder: (_) => LoginPage(
             onSuccess: () => Navigator.pop(context, true),
+            onboardingFullTour: true,
           ),
         ),
       );
@@ -213,6 +220,7 @@ class _AddActionCardState extends State<AddActionCard> {
           SizedBox(height: widget.showDescription ? 16 : 14),
           TextField(
             controller: _controller,
+            onChanged: widget.onNoteChanged,
             style: GoogleFonts.notoSans(fontSize: 15, color: Colors.white, height: 1.4),
             decoration: InputDecoration(
               hintText: widget.hintText ?? 'Aksiyonunu buraya yaz...',
@@ -238,44 +246,47 @@ class _AddActionCardState extends State<AddActionCard> {
             minLines: 3,
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: _sending ? null : _onAddAction,
-                child: Ink(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        Color(0xFF0095FF),
-                        Color(0xFF0070E0),
-                      ],
+          KeyedSubtree(
+            key: widget.actionButtonKey,
+            child: SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: _sending ? null : _onAddAction,
+                  child: Ink(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Color(0xFF0095FF),
+                          Color(0xFF0070E0),
+                        ],
+                      ),
                     ),
-                  ),
-                  child: Center(
-                    child: _sending
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                    child: Center(
+                      child: _sending
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              'Aksiyon Ekle',
+                              style: GoogleFonts.notoSans(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
                             ),
-                          )
-                        : Text(
-                            'Aksiyon Ekle',
-                            style: GoogleFonts.notoSans(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
+                    ),
                   ),
                 ),
               ),

@@ -61,12 +61,14 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   final GlobalKey _onboardingComposerAreaKey = GlobalKey();
   final GlobalKey _detailReadBodyKey = GlobalKey();
   final GlobalKey _detailActionCardKey = GlobalKey();
+  final GlobalKey _detailActionButtonKey = GlobalKey();
   final GlobalKey _detailBackButtonKey = GlobalKey();
   bool _commentPointsSpotlightVisible = false;
   int _spotlightEarnedPoints = 0;
   List<String> _spotlightNewBadgeIds = const [];
   bool _detailReadCoachShown = false;
   bool _detailActionCoachShown = false;
+  bool _detailActionButtonCoachShown = false;
   bool _detailBackPopupShown = false;
 
   @override
@@ -826,7 +828,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           keyTarget: _detailActionCardKey,
           shape: ShapeLightFocus.RRect,
           radius: 16,
-          enableTargetTab: false,
+          enableTargetTab: true,
           enableOverlayTab: false,
           paddingFocus: 8,
           borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
@@ -842,7 +844,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   border: Border.all(color: const Color(0xFF2C2C2E)),
                 ),
                 child: Text(
-                  'Adım 17/22\n\nAksiyonunu yazıp `Aksiyon Ekle` ile kaydet.',
+                  'Adım 17/22\n\nKarta bir kez dokunup spotlightı kapat; sonra aksiyonunu yazıp `Aksiyon Ekle` ile kaydet.',
                   style: GoogleFonts.notoSans(
                     color: const Color(0xFFE2E2E2),
                     fontSize: 14,
@@ -872,6 +874,59 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       body:
           'Aksiyon kaydedildi. Şimdi sol üstteki geri oka dokunarak bu adımı tamamla.',
     );
+  }
+
+  Future<void> _maybeShowActionButtonSpotlight(String value) async {
+    if (_detailActionButtonCoachShown) return;
+    if (value.trim().isEmpty) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftDetailReadIntro &&
+        ftp != OnboardingService.ftDetailBackToHome) {
+      return;
+    }
+    if (!mounted) return;
+    _detailActionButtonCoachShown = true;
+    TutorialCoachMark(
+      targets: [
+        TargetFocus(
+          identify: 'detail_action_button',
+          keyTarget: _detailActionButtonKey,
+          shape: ShapeLightFocus.RRect,
+          radius: 12,
+          enableTargetTab: true,
+          enableOverlayTab: false,
+          paddingFocus: 6,
+          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
+          contents: [
+            TargetContent(
+              align: ContentAlign.top,
+              padding: const EdgeInsets.only(bottom: 12),
+              builder: (c, controller) => Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1C1E),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2C2C2E)),
+                ),
+                child: Text(
+                  'Harika. Şimdi `Aksiyon Ekle` butonuna bas.',
+                  style: GoogleFonts.notoSans(
+                    color: const Color(0xFFE2E2E2),
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+      colorShadow: Colors.black,
+      opacityShadow: 0.75,
+      pulseEnable: false,
+      textSkip: 'Geç',
+      onSkip: () => true,
+    ).show(context: context);
   }
 
   Future<void> _handleBackPressed() async {
@@ -1152,6 +1207,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                           child: AddActionCard(
                             quoteId: widget.item.id,
                             quoteTitle: widget.item.title,
+                            actionButtonKey: _detailActionButtonKey,
+                            onNoteChanged: (value) {
+                              unawaited(_maybeShowActionButtonSpotlight(value));
+                            },
                             onActionSaved: () async {
                               await _loadMyAction();
                               if (!context.mounted) return;

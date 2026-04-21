@@ -9,6 +9,7 @@ import '../services/auth_service.dart';
 import '../services/gamification_service.dart';
 import '../services/notification_badge_controller.dart';
 import '../services/notification_store_service.dart';
+import '../services/onboarding_service.dart';
 import '../widgets/login_full_tour_coach.dart';
 
 /// Giriş sayfası — Apple ve Google ile giriş ([Figma](https://www.figma.com/design/v3UoAoZoaW92TprwR8CSk1/Periodicly-Notification?node-id=60-1024)).
@@ -68,6 +69,12 @@ class _LoginPageState extends State<LoginPage> {
         await GamificationService.syncFromBackend();
         await NotificationStoreService.syncFromBackend();
         await NotificationBadgeController.instance.refresh();
+        final ftp = await OnboardingService.getGlobalTourStep();
+        if (ftp <= OnboardingService.tourStep03LoginSuccess) {
+          await OnboardingService.setGlobalTourStep(
+            OnboardingService.tourStep04HomeCardIntro,
+          );
+        }
         if (!mounted) return;
         widget.onSuccess?.call();
         if (mounted) Navigator.of(context).pop(true);

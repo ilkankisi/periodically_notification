@@ -125,8 +125,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _firstMissionCoachWanted = wanted;
       if (globalStep == OnboardingService.ftNeedHomeAction) {
-        // Tur döngüde tekrar Home adımına döndüğünde spotlight yeniden açılabilsin.
-        if (!_fullTourHomeCoachOpenedCardAtStep5) {
+        // Tek adım debug modunda her seferinde yeniden göster.
+        if (OnboardingService.kDebugSingleStepLoop ||
+            !_fullTourHomeCoachOpenedCardAtStep5) {
           _fullTourHomeActionScheduled = false;
         }
       } else if (globalStep == OnboardingService.tourStep04HomeCardIntro) {
@@ -213,9 +214,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
     final ftp = await OnboardingService.getGlobalTourStep();
-    if (ftp != OnboardingService.tourStep04HomeCardIntro &&
-        ftp != OnboardingService.ftNeedHomeAction) {
-      _tourLog('_tryScheduleFullTourHomeAction skip=wrong_step step=$ftp');
+    if (ftp <= OnboardingService.tourStep03LoginSuccess) {
+      await OnboardingService.setGlobalTourStep(
+        OnboardingService.tourStep04HomeCardIntro,
+      );
+      if (!mounted) return;
+    }
+    final syncedStep = await OnboardingService.getGlobalTourStep();
+    if (syncedStep != OnboardingService.tourStep04HomeCardIntro &&
+        syncedStep != OnboardingService.ftNeedHomeAction) {
+      _tourLog(
+        '_tryScheduleFullTourHomeAction skip=wrong_step step=$syncedStep',
+      );
       return;
     }
     if (!_fullTourHomeIntroShown) {

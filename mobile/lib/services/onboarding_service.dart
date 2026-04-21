@@ -67,6 +67,8 @@ class OnboardingService {
   /// Tur bitince prefs sıfırlanıp yeniden başlatılır (geliştirme).
   /// Test bittiğinde false yap.
   static bool kDebugRepeatFullTour = true;
+  /// Geçici test modu: sadece tek adım çalışsın ve hep aynı adıma dönsün.
+  static bool kDebugSingleStepLoop = false;
 
   /// 22 adım için okunabilir envanter (debug/log amacıyla).
   static const List<(int step, String id)> fullTourStepInventory = [
@@ -145,21 +147,21 @@ class OnboardingService {
       return;
     }
 
-    await p.setInt(_keyFullTourV4Step, ftNeedHomeAction);
+    await p.setInt(_keyFullTourV4Step, tourStep04HomeCardIntro);
   }
 
   /// Eski tek-bayt v2 (0..7) → 22 adım. 8..22 ise zaten geniş adım kabul edilir.
   static int _migrateLegacyCompactOrKeepFull(int raw) {
-    if (raw < 0) return ftNeedHomeAction;
+    if (raw < 0) return tourStep04HomeCardIntro;
     if (raw > ftFullTourDone) return ftFullTourDone;
     if (raw > 7) {
       return raw;
     }
     switch (raw) {
       case 0:
-        return ftNeedHomeAction;
+        return tourStep04HomeCardIntro;
       case 1:
-        return ftNeedHomeAction;
+        return tourStep04HomeCardIntro;
       case 2:
         return ftExploreIntro;
       case 3:
@@ -173,12 +175,12 @@ class OnboardingService {
       case 7:
         return ftFullTourDone;
       default:
-        return ftNeedHomeAction;
+        return tourStep04HomeCardIntro;
     }
   }
 
   static int _debugLoopStartStep() {
-    return ftNeedLogin;
+    return tourStep04HomeCardIntro;
   }
 
   static Future<void> _applyDebugLoopIfNeeded(
@@ -193,7 +195,14 @@ class OnboardingService {
   static Future<int> getGlobalTourStep() async {
     await ensureFullTourMigrated();
     final p = await SharedPreferences.getInstance();
-    final step = p.getInt(_keyFullTourV4Step) ?? ftNeedHomeAction;
+    final step = p.getInt(_keyFullTourV4Step) ?? tourStep04HomeCardIntro;
+    if (kDebugSingleStepLoop) {
+      final only = _debugLoopStartStep();
+      if (step != only) {
+        await p.setInt(_keyFullTourV4Step, only);
+      }
+      return only;
+    }
     var out = step.clamp(0, ftFullTourDone);
     // Uygulama yeniden açıldığında da debug döngüsü tetiklensin.
     if (kDebugRepeatFullTour && out >= ftFullTourDone) {
@@ -207,6 +216,10 @@ class OnboardingService {
   static Future<void> setGlobalTourStep(int step) async {
     await ensureFullTourMigrated();
     final p = await SharedPreferences.getInstance();
+    if (kDebugSingleStepLoop) {
+      await p.setInt(_keyFullTourV4Step, _debugLoopStartStep());
+      return;
+    }
     final clamped = step.clamp(0, ftFullTourDone);
     await p.setInt(_keyFullTourV4Step, clamped);
     if (clamped >= ftFullTourDone) {
