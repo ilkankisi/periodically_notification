@@ -150,8 +150,8 @@ class FullTourHomeActionCoach {
         borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
         contents: [
           TargetContent(
-            align: ContentAlign.top,
-            padding: const EdgeInsets.only(bottom: 14),
+            align: ContentAlign.bottom,
+            padding: const EdgeInsets.only(top: 14),
             builder: (c, controller) => infoCard(controller),
           ),
         ],
