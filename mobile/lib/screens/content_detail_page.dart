@@ -71,6 +71,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   bool _detailActionCoachShown = false;
   bool _detailActionButtonCoachShown = false;
   bool _detailBackPopupShown = false;
+  /// Geri spotlight hedefine dokunuldu; coach [onFinish] ile kapandıktan sonra anasayfaya dön.
+  bool _detailBackSpotlightTargetTapped = false;
+  bool _handlingTourBackNavigation = false;
 
   @override
   void initState() {
@@ -891,7 +894,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     if (!mounted) return;
     await Future<void>.delayed(const Duration(milliseconds: 120));
     if (!mounted || _detailBackButtonKey.currentContext == null) return;
-    var tapped = false;
+    _detailBackSpotlightTargetTapped = false;
     TutorialCoachMark(
       targets: [
         TargetFocus(
@@ -931,14 +934,20 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       pulseEnable: false,
       textSkip: 'Geç',
       onClickTarget: (_) {
-        tapped = true;
+        _detailBackSpotlightTargetTapped = true;
       },
       onFinish: () {
-        if (tapped) {
+        if (!_detailBackSpotlightTargetTapped) return;
+        _detailBackSpotlightTargetTapped = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
           unawaited(_handleBackPressed());
-        }
+        });
       },
-      onSkip: () => true,
+      onSkip: () {
+        _detailBackSpotlightTargetTapped = false;
+        return true;
+      },
     ).show(context: context);
   }
 
@@ -996,11 +1005,15 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   }
 
   Future<void> _handleBackPressed() async {
-    final moved = await OnboardingService.onDetailBackConfirmedToProfile();
-    if (!mounted) return;
-    Navigator.pop(context);
-    if (moved) {
+    if (_handlingTourBackNavigation) return;
+    _handlingTourBackNavigation = true;
+    try {
+      await OnboardingService.onDetailBackConfirmedToProfile();
+      if (!mounted) return;
+      Navigator.pop(context);
       OnboardingService.requestTab(0);
+    } finally {
+      _handlingTourBackNavigation = false;
     }
   }
 
