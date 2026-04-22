@@ -40,6 +40,8 @@ class _ExplorePageState extends State<ExplorePage> {
   int? _fullTourPhaseCache;
   bool _fullTourIntroScheduled = false;
   bool _postBadgesFirstCardCoachScheduled = false;
+  /// Post-rozet Keşfet adımında kart spotlight’ından önce bilgi diyaloğu bir kez.
+  bool _postBadgesExploreOpenContentPrefaceDone = false;
 
   /// ($categoryKey, $uppercaseLabel) — key null = Tümü
   static const List<(String?, String)> _categoryFilters = [
@@ -117,6 +119,71 @@ class _ExplorePageState extends State<ExplorePage> {
     }
   }
 
+  Future<void> _showPostBadgesExploreOpenContentPreface() async {
+    if (!mounted) return;
+    const accent = Color(0xFF0095FF);
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1C1C1E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'İçeriği aç',
+                  style: GoogleFonts.newsreader(
+                    color: const Color(0xFFE2E2E2),
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0x14FFFFFF),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Adım 23/28',
+                  style: GoogleFonts.notoSans(
+                    color: const Color(0xFFD1D5DB),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Spotlight ile işaretlenen karta dokunarak içeriğe gidin; sonraki adımda Sakla ile kütüphanenize eklenecek.',
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFF9CA3AF),
+              fontSize: 14,
+              height: 1.45,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              style: TextButton.styleFrom(foregroundColor: accent),
+              child: Text(
+                'Tamam',
+                style: GoogleFonts.notoSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _maybePostBadgesFirstCardCoach() async {
     if (!mounted || _postBadgesFirstCardCoachScheduled) return;
     final p =
@@ -129,6 +196,18 @@ class _ExplorePageState extends State<ExplorePage> {
       if (!mounted || _postTourFirstCardKey.currentContext == null) {
         _postBadgesFirstCardCoachScheduled = false;
         return;
+      }
+      if (!_postBadgesExploreOpenContentPrefaceDone) {
+        await _showPostBadgesExploreOpenContentPreface();
+        _postBadgesExploreOpenContentPrefaceDone = true;
+        if (!mounted) {
+          _postBadgesFirstCardCoachScheduled = false;
+          return;
+        }
+        if (_postTourFirstCardKey.currentContext == null) {
+          _postBadgesFirstCardCoachScheduled = false;
+          return;
+        }
       }
       var tapped = false;
       TutorialCoachMark(

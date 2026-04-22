@@ -168,7 +168,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     border: Border.all(color: const Color(0xFF2C2C2E)),
                   ),
                   child: Text(
-                    'Adım 20/22\n\nRozetlerini görmek için `Tümünü Gör` butonuna bas.',
+                    'Adım 6/22\n\nRozetlerini görmek için `Tümünü Gör` butonuna bas.',
                     style: GoogleFonts.notoSans(
                       color: const Color(0xFFE2E2E2),
                       fontSize: 14,
