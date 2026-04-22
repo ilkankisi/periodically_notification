@@ -319,12 +319,34 @@ class _MainShellState extends State<_MainShell> {
           enableOverlayTab: false,
           paddingFocus: 6,
           borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-          contents: [],
+          contents: [
+            TargetContent(
+              align: ContentAlign.top,
+              padding: const EdgeInsets.only(bottom: 12, left: 18, right: 18),
+              builder: (context, controller) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1C1E),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2C2C2E)),
+                ),
+                child: const Text(
+                  'Profil sayfasına geçmek için sağ alttaki PROFİL sekmesine dokun.',
+                  style: TextStyle(
+                    color: Color(0xFFE2E2E2),
+                    fontSize: 14,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
       colorShadow: Colors.black,
       opacityShadow: 0.78,
       pulseEnable: false,
+      alignSkip: Alignment.topRight,
       textSkip: 'Geç',
       onClickTarget: (_) {
         tapped = true;

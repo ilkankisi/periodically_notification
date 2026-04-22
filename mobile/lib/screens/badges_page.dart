@@ -41,7 +41,7 @@ class _BadgesPageState extends State<BadgesPage> {
   Timer? _backCoachMinViewTimer;
   Timer? _backCoachFallbackTimer;
   TutorialCoachMark? _badgesBackCoach;
-  final GlobalKey _weeklyStreakTileTourKey = GlobalKey();
+  final GlobalKey _firstActionCardTourKey = GlobalKey();
   bool _fullTourWeeklyTileCoachShown = false;
 
   /// Kaydırma ile tetiklemek için toplam ofset (küçük kaydırmalar tek seferde spotlight açmasın).
@@ -154,7 +154,7 @@ class _BadgesPageState extends State<BadgesPage> {
     _fullTourWeeklyTileCoachShown = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await Future<void>.delayed(const Duration(milliseconds: 220));
-      if (!mounted || _weeklyStreakTileTourKey.currentContext == null) {
+      if (!mounted || _firstActionCardTourKey.currentContext == null) {
         _fullTourWeeklyTileCoachShown = false;
         return;
       }
@@ -162,8 +162,8 @@ class _BadgesPageState extends State<BadgesPage> {
       TutorialCoachMark(
         targets: [
           TargetFocus(
-            identify: 'badges_weekly_tile_spotlight',
-            keyTarget: _weeklyStreakTileTourKey,
+            identify: 'badges_first_action_card_spotlight',
+            keyTarget: _firstActionCardTourKey,
             shape: ShapeLightFocus.RRect,
             radius: 14,
             enableTargetTab: true,
@@ -182,7 +182,7 @@ class _BadgesPageState extends State<BadgesPage> {
                     border: Border.all(color: const Color(0xFF2C2C2E)),
                   ),
                   child: Text(
-                    'Adım 21/22\n\nİlk zincir rozetin burada görünüyor. Karta dokunarak turu tamamla.',
+                    'Adım 21/22\n\nİlk aksiyon kartın burada. Karta dokunarak turu tamamla.',
                     style: GoogleFonts.notoSans(
                       color: const Color(0xFFE2E2E2),
                       fontSize: 14,
@@ -393,6 +393,10 @@ class _BadgesPageState extends State<BadgesPage> {
                   total: total,
                   progress: progress,
                 ),
+                const SizedBox(height: 16),
+                _buildFirstActionTakenCard(
+                  unlocked: vm.unlocked.contains('streak_7'),
+                ),
                 const SizedBox(height: 28),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -459,14 +463,10 @@ class _BadgesPageState extends State<BadgesPage> {
                 ],
                 ...GamificationBadgeDef.catalog.map((b) {
                   final on = vm.unlocked.contains(b.id);
-                  final tile = Padding(
+                  return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _BadgeTileFigma(badge: b, unlocked: on),
                   );
-                  if (b.id == 'streak_7') {
-                    return KeyedSubtree(key: _weeklyStreakTileTourKey, child: tile);
-                  }
-                  return tile;
                 }),
                 const SizedBox(height: 8),
                 _buildInfoFooter(),
@@ -621,6 +621,64 @@ class _BadgesPageState extends State<BadgesPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildFirstActionTakenCard({required bool unlocked}) {
+    final title = unlocked ? 'İlk aksiyonu aldın' : 'İlk aksiyonunu ekle';
+    final subtitle = unlocked
+        ? 'Harika başlangıç. Zinciri sürdürerek yeni rozetlerin kilidini aç.'
+        : 'Günün aksiyonunu ekleyerek ilk kartını aktif hale getir.';
+    final iconColor = unlocked ? const Color(0xFF0095FF) : const Color(0xFF6B7280);
+    return KeyedSubtree(
+      key: _firstActionCardTourKey,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.task_alt_rounded, color: iconColor, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.notoSans(
+                      color: const Color(0xFFE5E5EA),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.notoSans(
+                      color: const Color(0xFF9CA3AF),
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
