@@ -66,6 +66,7 @@ class _BadgesPageState extends State<BadgesPage> {
   static _BadgeViewModel _guestPreviewViewModelForFirstLaunch() {
     return _BadgeViewModel(
       points: 320,
+      hasAnyAction: false,
       unlocked: {
         'social_first',
         'social_10',
@@ -213,13 +214,14 @@ class _BadgesPageState extends State<BadgesPage> {
 
   Future<_BadgeViewModel> _load() async {
     if (!AuthService.isLoggedIn) {
-      return _BadgeViewModel(points: 0, unlocked: {});
+      return _BadgeViewModel(points: 0, hasAnyAction: false, unlocked: {});
     }
     await ContentSyncService.syncFromBackend();
     await GamificationService.syncFromBackend();
     final snap = await GamificationService.readSnapshot();
     return _BadgeViewModel(
       points: snap.socialPoints,
+      hasAnyAction: snap.maxStreakRecorded > 0,
       unlocked: snap.unlocked,
     );
   }
@@ -337,7 +339,7 @@ class _BadgesPageState extends State<BadgesPage> {
             ),
           );
         }
-        final vm = snapshot.data ?? _BadgeViewModel(points: 0, unlocked: {});
+        final vm = snapshot.data ?? _BadgeViewModel(points: 0, hasAnyAction: false, unlocked: {});
         final earned = GamificationBadgeDef.catalog.where((b) => vm.unlocked.contains(b.id)).length;
         final total = GamificationBadgeDef.catalog.length;
         final progress = total > 0 ? earned / total : 0.0;
@@ -417,7 +419,7 @@ class _BadgesPageState extends State<BadgesPage> {
                   if (b.id == 'streak_7') {
                     return Column(
                       children: [
-                        _buildFirstActionTakenCard(unlocked: on),
+                        _buildFirstActionTakenCard(unlocked: vm.hasAnyAction),
                         const SizedBox(height: 12),
                         tile,
                       ],
@@ -877,10 +879,12 @@ class _BadgeTileFigma extends StatelessWidget {
 
 class _BadgeViewModel {
   final int points;
+  final bool hasAnyAction;
   final Set<String> unlocked;
 
   _BadgeViewModel({
     required this.points,
+    required this.hasAnyAction,
     required this.unlocked,
   });
 }
