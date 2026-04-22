@@ -5,7 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import '../widgets/app_spotlight_layer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/comment.dart';
@@ -71,8 +71,6 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   bool _detailActionCoachShown = false;
   bool _detailActionButtonCoachShown = false;
   bool _detailBackPopupShown = false;
-  /// Geri spotlight hedefine dokunuldu; coach [onFinish] ile kapandıktan sonra anasayfaya dön.
-  bool _detailBackSpotlightTargetTapped = false;
   bool _handlingTourBackNavigation = false;
   final GlobalKey _postTourSaveCardKey = GlobalKey();
   bool _postBadgesSaveLibraryCoachScheduled = false;
@@ -155,6 +153,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   }
 
   Future<void> _toggleSaved() async {
+    if (AppSpotlightLayer.isShowing) {
+      AppSpotlightLayer.completeTargetTap();
+    }
     final beforeStep = await OnboardingService.getGlobalTourStep();
     final wasUnsaved = !_saved;
     final nowSaved = await SavedItemsService.toggleSaved(widget.item.id);
@@ -184,59 +185,34 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       _postBadgesSaveLibraryCoachScheduled = false;
       return;
     }
-    var tapped = false;
-    TutorialCoachMark(
-      targets: [
-        TargetFocus(
-          identify: 'post_badges_detail_save_card',
-          keyTarget: _postTourSaveCardKey,
-          shape: ShapeLightFocus.RRect,
-          radius: 14,
-          enableTargetTab: true,
-          enableOverlayTab: false,
-          paddingFocus: 8,
-          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-          contents: [
-            TargetContent(
-              align: ContentAlign.top,
-              padding: const EdgeInsets.only(bottom: 12, left: 18, right: 18),
-              builder: (context, controller) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1C1C1E),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF2C2C2E)),
-                ),
-                child: Text(
-                  'Bu içeriği Sakla kartına dokunarak kütüphanene ekle.',
-                  style: GoogleFonts.notoSans(
-                    color: const Color(0xFFE2E2E2),
-                    fontSize: 14,
-                    height: 1.35,
-                  ),
-                ),
-              ),
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: _postTourSaveCardKey,
+      holePadding: const EdgeInsets.all(8),
+      holeBorderRadius: 14,
+      caption: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF2C2C2E)),
+          ),
+          child: Text(
+            'Bu içeriği Sakla kartına dokunarak kütüphanene ekle.',
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFFE2E2E2),
+              fontSize: 14,
+              height: 1.35,
             ),
-          ],
+          ),
         ),
-      ],
-      colorShadow: Colors.black,
-      opacityShadow: 0.78,
-      pulseEnable: false,
-      alignSkip: Alignment.topRight,
-      textSkip: 'Geç',
-      onClickTarget: (_) {
-        tapped = true;
-      },
-      onFinish: () {
+      ),
+      onClosed: (_) {
         _postBadgesSaveLibraryCoachScheduled = false;
-        if (!tapped) return;
       },
-      onSkip: () {
-        _postBadgesSaveLibraryCoachScheduled = false;
-        return true;
-      },
-    ).show(context: context);
+    );
   }
 
   List<Comment> _orderedComments() {
@@ -860,35 +836,14 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   }
 
   void _showDetailReadBodyCoach() {
-    var tapped = false;
-    TutorialCoachMark(
-      targets: [
-        TargetFocus(
-          identify: 'detail_read_body',
-          keyTarget: _detailReadBodyKey,
-          shape: ShapeLightFocus.RRect,
-          radius: 10,
-          enableTargetTab: true,
-          enableOverlayTab: false,
-          paddingFocus: 6,
-          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-          contents: [],
-        ),
-      ],
-      colorShadow: Colors.black,
-      opacityShadow: 0.75,
-      pulseEnable: false,
-      textSkip: 'Geç',
-      onClickTarget: (_) {
-        tapped = true;
-      },
-      onFinish: () {
-        if (tapped) {
-          unawaited(_onDetailReadBodyTapped());
-        }
-      },
-      onSkip: () => true,
-    ).show(context: context);
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: _detailReadBodyKey,
+      holePadding: const EdgeInsets.all(6),
+      holeBorderRadius: 10,
+      caption: const SizedBox.shrink(),
+      onClosed: (_) {},
+    );
   }
 
   Future<void> _onDetailReadBodyTapped() async {
@@ -896,6 +851,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     if (ftp != OnboardingService.ftDetailReadIntro) return;
     final moved = await OnboardingService.onDetailReadBodyTapped();
     if (!moved) return;
+    if (AppSpotlightLayer.isShowing) {
+      AppSpotlightLayer.completeTargetTap();
+    }
     if (!mounted || _detailActionCoachShown) return;
     _detailActionCoachShown = true;
     await Future<void>.delayed(const Duration(milliseconds: 180));
@@ -909,47 +867,29 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       alignment: 0.2,
     );
     if (!mounted) return;
-    TutorialCoachMark(
-      targets: [
-        TargetFocus(
-          identify: 'detail_action_card',
-          keyTarget: _detailActionCardKey,
-          shape: ShapeLightFocus.RRect,
-          radius: 16,
-          enableTargetTab: true,
-          enableOverlayTab: false,
-          paddingFocus: 8,
-          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-          contents: [
-            TargetContent(
-              align: ContentAlign.top,
-              padding: const EdgeInsets.only(bottom: 12),
-              builder: (c, controller) => Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1C1C1E),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF2C2C2E)),
-                ),
-                child: Text(
-                  'Adım 17/22\n\nKarta bir kez dokunup spotlightı kapat; sonra aksiyonunu yazıp `Aksiyon Ekle` ile kaydet.',
-                  style: GoogleFonts.notoSans(
-                    color: const Color(0xFFE2E2E2),
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            ),
-          ],
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: _detailActionCardKey,
+      holePadding: const EdgeInsets.all(8),
+      holeBorderRadius: 16,
+      caption: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
         ),
-      ],
-      colorShadow: Colors.black,
-      opacityShadow: 0.75,
-      pulseEnable: false,
-      textSkip: 'Geç',
-      onSkip: () => true,
-    ).show(context: context);
+        child: Text(
+          'Adım 17/22\n\nKarta bir kez dokunup spotlightı kapat; sonra aksiyonunu yazıp `Aksiyon Ekle` ile kaydet.',
+          style: GoogleFonts.notoSans(
+            color: const Color(0xFFE2E2E2),
+            fontSize: 14,
+            height: 1.4,
+          ),
+        ),
+      ),
+      onClosed: (_) {},
+    );
   }
 
   Future<void> _onDetailActionSavedForTour() async {
@@ -977,61 +917,39 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     if (!mounted) return;
     await Future<void>.delayed(const Duration(milliseconds: 120));
     if (!mounted || _detailBackButtonKey.currentContext == null) return;
-    _detailBackSpotlightTargetTapped = false;
-    TutorialCoachMark(
-      targets: [
-        TargetFocus(
-          identify: 'detail_back_button',
-          keyTarget: _detailBackButtonKey,
-          shape: ShapeLightFocus.Circle,
-          enableTargetTab: true,
-          enableOverlayTab: false,
-          paddingFocus: 8,
-          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-          contents: [
-            TargetContent(
-              align: ContentAlign.bottom,
-              padding: const EdgeInsets.only(top: 10),
-              builder: (c, controller) => Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1C1C1E),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF2C2C2E)),
-                ),
-                child: Text(
-                  'Bu geri oka basıp anasayfaya dön.',
-                  style: GoogleFonts.notoSans(
-                    color: const Color(0xFFE2E2E2),
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            ),
-          ],
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: _detailBackButtonKey,
+      holePadding: const EdgeInsets.all(8),
+      holeBorderRadius: 999,
+      captionAlignment: Alignment.bottomCenter,
+      captionMargin: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+      caption: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
         ),
-      ],
-      colorShadow: Colors.black,
-      opacityShadow: 0.75,
-      pulseEnable: false,
-      textSkip: 'Geç',
-      onClickTarget: (_) {
-        _detailBackSpotlightTargetTapped = true;
+        child: Text(
+          'Bu geri oka basıp anasayfaya dön.',
+          style: GoogleFonts.notoSans(
+            color: const Color(0xFFE2E2E2),
+            fontSize: 14,
+            height: 1.4,
+          ),
+        ),
+      ),
+      onClosed: (reason) {
+        if (reason == AppSpotlightReason.skipped) return;
+        if (reason == AppSpotlightReason.targetTapped) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            unawaited(_handleBackPressed());
+          });
+        }
       },
-      onFinish: () {
-        if (!_detailBackSpotlightTargetTapped) return;
-        _detailBackSpotlightTargetTapped = false;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          unawaited(_handleBackPressed());
-        });
-      },
-      onSkip: () {
-        _detailBackSpotlightTargetTapped = false;
-        return true;
-      },
-    ).show(context: context);
+    );
   }
 
   Future<void> _maybeShowActionButtonSpotlight(String value) async {
@@ -1044,50 +962,36 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     }
     if (!mounted) return;
     _detailActionButtonCoachShown = true;
-    TutorialCoachMark(
-      targets: [
-        TargetFocus(
-          identify: 'detail_action_button',
-          keyTarget: _detailActionButtonKey,
-          shape: ShapeLightFocus.RRect,
-          radius: 12,
-          enableTargetTab: true,
-          enableOverlayTab: false,
-          paddingFocus: 6,
-          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-          contents: [
-            TargetContent(
-              align: ContentAlign.top,
-              padding: const EdgeInsets.only(bottom: 12),
-              builder: (c, controller) => Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1C1C1E),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF2C2C2E)),
-                ),
-                child: Text(
-                  'Harika. Şimdi `Aksiyon Ekle` butonuna bas.',
-                  style: GoogleFonts.notoSans(
-                    color: const Color(0xFFE2E2E2),
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            ),
-          ],
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: _detailActionButtonKey,
+      holePadding: const EdgeInsets.all(6),
+      holeBorderRadius: 12,
+      caption: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
         ),
-      ],
-      colorShadow: Colors.black,
-      opacityShadow: 0.75,
-      pulseEnable: false,
-      textSkip: 'Geç',
-      onSkip: () => true,
-    ).show(context: context);
+        child: Text(
+          'Harika. Şimdi `Aksiyon Ekle` butonuna bas.',
+          style: GoogleFonts.notoSans(
+            color: const Color(0xFFE2E2E2),
+            fontSize: 14,
+            height: 1.4,
+          ),
+        ),
+      ),
+      onClosed: (_) {},
+    );
   }
 
   Future<void> _handleBackPressed() async {
+    if (AppSpotlightLayer.isShowing) {
+      AppSpotlightLayer.completeTargetTap();
+      return;
+    }
     if (_handlingTourBackNavigation) return;
     _handlingTourBackNavigation = true;
     try {

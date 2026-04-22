@@ -5,7 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import '../widgets/app_spotlight_layer.dart';
 
 import '../services/auth_service.dart';
 import '../services/gamification_service.dart';
@@ -144,71 +144,33 @@ class _ProfilePageState extends State<ProfilePage> {
         _profileTourScheduled = false;
         return;
       }
-      var openedBadges = false;
-      TutorialCoachMark(
-        targets: [
-          TargetFocus(
-            identify: 'profile_badges_see_all_spotlight',
-            keyTarget: _profileBadgesSeeAllKey,
-            shape: ShapeLightFocus.RRect,
-            radius: 10,
-            enableTargetTab: true,
-            enableOverlayTab: false,
-            paddingFocus: 8,
-            borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-            contents: [
-              TargetContent(
-                align: ContentAlign.bottom,
-                padding: const EdgeInsets.only(top: 14),
-                builder: (c, controller) => Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1C1C1E),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF2C2C2E)),
-                  ),
-                  child: Text(
-                    'Adım 20/22\n\nRozetlerini görmek için `Tümünü Gör` butonuna bas.',
-                    style: GoogleFonts.notoSans(
-                      color: const Color(0xFFE2E2E2),
-                      fontSize: 14,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+      AppSpotlightLayer.show(
+        context: context,
+        targetKey: _profileBadgesSeeAllKey,
+        holePadding: const EdgeInsets.all(8),
+        holeBorderRadius: 10,
+        captionAlignment: Alignment.bottomCenter,
+        captionMargin: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+        caption: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF2C2C2E)),
           ),
-        ],
-        colorShadow: Colors.black,
-        opacityShadow: 0.78,
-        pulseEnable: false,
-        textSkip: 'Geç',
-        onClickTarget: (_) {
-          openedBadges = true;
-        },
-        onFinish: () {
-          if (!openedBadges) {
-            _profileTourScheduled = false;
-            return;
-          }
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            final moved = await OnboardingService.onProfileBadgesSeeAllTapped();
-            if (!mounted) return;
-            _profileTourScheduled = false;
-            if (!moved) return;
-            await Navigator.push<void>(
-              context,
-              MaterialPageRoute<void>(builder: (_) => const BadgesPage()),
-            );
-            if (mounted) await _refreshGamification();
-          });
-        },
-        onSkip: () {
+          child: Text(
+            'Adım 20/22\n\nRozetlerini görmek için `Tümünü Gör` butonuna bas.',
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFFE2E2E2),
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+        ),
+        onClosed: (_) {
           _profileTourScheduled = false;
-          return true;
         },
-      ).show(context: context);
+      );
     });
   }
 
@@ -593,6 +555,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   TextButton(
                     key: _profileBadgesSeeAllKey,
                     onPressed: () async {
+                      if (AppSpotlightLayer.isShowing) {
+                        AppSpotlightLayer.completeTargetTap();
+                      }
                       await OnboardingService.onProfileBadgesSeeAllTapped();
                       if (!mounted) return;
                       await Navigator.push<void>(

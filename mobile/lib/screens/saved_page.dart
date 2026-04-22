@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import '../widgets/app_spotlight_layer.dart';
 
 import '../models/motivation.dart';
 import '../widgets/motivation_cached_image.dart';
@@ -78,6 +78,9 @@ class _SavedPageState extends State<SavedPage> {
   }
 
   Future<void> _onRefreshWithTourHook() async {
+    if (AppSpotlightLayer.isShowing) {
+      AppSpotlightLayer.completeTargetTap();
+    }
     await _load();
     await OnboardingService.onPostBadgesSavedPullRefreshCompleted();
     if (!mounted) return;
@@ -97,60 +100,35 @@ class _SavedPageState extends State<SavedPage> {
         return;
       }
       _postBadgesPullRefreshCoachPresented = true;
-      var tapped = false;
-      TutorialCoachMark(
-        targets: [
-          TargetFocus(
-            identify: 'post_badges_saved_pull_refresh',
-            keyTarget: _postBadgesSavedRefreshKey,
-            shape: ShapeLightFocus.RRect,
-            radius: 14,
-            enableTargetTab: true,
-            enableOverlayTab: false,
-            paddingFocus: 8,
-            borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-            contents: [
-              TargetContent(
-                align: ContentAlign.bottom,
-                padding: const EdgeInsets.only(bottom: 12, left: 18, right: 18),
-                builder: (context, controller) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1C1C1E),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2C2C2E)),
-                  ),
-                  child: Text(
-                    'Listeyi yenilemek için aşağı çek. Tur burada biter.',
-                    style: GoogleFonts.notoSans(
-                      color: const Color(0xFFE2E2E2),
-                      fontSize: 14,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+      AppSpotlightLayer.show(
+        context: context,
+        targetKey: _postBadgesSavedRefreshKey,
+        holePadding: const EdgeInsets.all(8),
+        holeBorderRadius: 14,
+        captionAlignment: Alignment.bottomCenter,
+        captionMargin: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+        caption: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF2C2C2E)),
           ),
-        ],
-        colorShadow: Colors.black,
-        opacityShadow: 0.78,
-        pulseEnable: false,
-        alignSkip: Alignment.topRight,
-        textSkip: 'Geç',
-        onClickTarget: (_) {
-          tapped = true;
-        },
-        onFinish: () {
-          if (!tapped) {
+          child: Text(
+            'Listeyi yenilemek için aşağı çek. Tur burada biter.',
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFFE2E2E2),
+              fontSize: 14,
+              height: 1.35,
+            ),
+          ),
+        ),
+        onClosed: (reason) {
+          if (reason == AppSpotlightReason.skipped) {
             _postBadgesPullRefreshCoachPresented = false;
           }
         },
-        onSkip: () {
-          _postBadgesPullRefreshCoachPresented = false;
-          return true;
-        },
-      ).show(context: context);
+      );
     });
   }
 

@@ -18,6 +18,7 @@ import 'notifications_page.dart';
 import 'zincir_page.dart';
 import '../widgets/first_main_card_coach.dart';
 import '../widgets/first_mission_coach.dart';
+import '../widgets/app_spotlight_layer.dart';
 import '../widgets/full_tour_home_action_coach.dart';
 import '../services/onboarding_service.dart';
 import 'badges_page.dart';
@@ -1221,8 +1222,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     return GestureDetector(
       key: _coachMainCardKey,
-      onTap: () =>
-          unawaited(_pushContentDetailV1Aware(latest, isMainHero: true)),
+      onTap: () {
+        if (FullTourHomeActionCoach.expectsMainCardTapCompletion) {
+          AppSpotlightLayer.completeTargetTap();
+          return;
+        }
+        unawaited(_pushContentDetailV1Aware(latest, isMainHero: true));
+      },
       child: cardBody,
     );
   }

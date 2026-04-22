@@ -2,17 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 import '../services/onboarding_service.dart';
+import 'app_spotlight_layer.dart';
 
 /// İlk açılış değer önerisinden sonra: günün kartı + zincir (2 adım).
-/// Tur bitince faz ilerler; rozet önizlemesi zincirin sonunda açılır.
 class FirstMissionCoach {
   FirstMissionCoach._();
-
-  static const Object _idAction = 'daily_action';
-  static const Object _idChain = 'chain';
 
   /// [onFlowComplete] coach tamamen kapandıktan ve tercih kaydedildikten sonra çağrılır (Geç / son Tamam).
   static void show({
@@ -21,6 +17,17 @@ class FirstMissionCoach {
     required GlobalKey zincirKey,
     Future<void> Function(BuildContext context)? onFlowComplete,
   }) {
+    unawaited(
+      _runShow(context, mainCardKey, zincirKey, onFlowComplete),
+    );
+  }
+
+  static Future<void> _runShow(
+    BuildContext context,
+    GlobalKey mainCardKey,
+    GlobalKey zincirKey,
+    Future<void> Function(BuildContext context)? onFlowComplete,
+  ) async {
     const accent = Color(0xFF0095FF);
     const cardBg = Color(0xFF1C1C1E);
     const border = Color(0xFF2C2C2E);
@@ -28,7 +35,7 @@ class FirstMissionCoach {
     const totalSteps = 2;
 
     Widget stepCard({
-      required TutorialCoachMarkController controller,
+      required VoidCallback onAdvance,
       required int step,
       required String title,
       required String body,
@@ -100,7 +107,7 @@ class FirstMissionCoach {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: controller.next,
+                    onPressed: onAdvance,
                     style: TextButton.styleFrom(
                       foregroundColor: accent,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -121,61 +128,6 @@ class FirstMissionCoach {
       );
     }
 
-    final targets = <TargetFocus>[
-      TargetFocus(
-        identify: _idAction,
-        keyTarget: mainCardKey,
-        shape: ShapeLightFocus.RRect,
-        radius: 20,
-        enableTargetTab: false,
-        enableOverlayTab: false,
-        paddingFocus: 12,
-        borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-        contents: [
-          TargetContent(
-            align: ContentAlign.top,
-            padding: const EdgeInsets.only(bottom: 14),
-            builder: (ctx, controller) {
-              return stepCard(
-                controller: controller,
-                step: 1,
-                title: 'Günün kartını aç',
-                body:
-                    'Aksiyonunu burada değil, sözün içinde yaz: karta dokun, aşağı kaydır ve kısa notunu kaydet.',
-                buttonLabel: 'Sonraki',
-              );
-            },
-          ),
-        ],
-      ),
-      TargetFocus(
-        identify: _idChain,
-        keyTarget: zincirKey,
-        shape: ShapeLightFocus.RRect,
-        radius: 999,
-        enableTargetTab: false,
-        enableOverlayTab: false,
-        paddingFocus: 10,
-        borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-        contents: [
-          TargetContent(
-            align: ContentAlign.bottom,
-            padding: const EdgeInsets.only(top: 14),
-            builder: (ctx, controller) {
-              return stepCard(
-                controller: controller,
-                step: 2,
-                title: 'Günlük zincir',
-                body:
-                    'Serini ve ilerlemeni buradan takip et; sözü açıp yorumlara da buradan devam edebilirsin.',
-                buttonLabel: 'Tamam',
-              );
-            },
-          ),
-        ],
-      ),
-    ];
-
     Future<void> scrollTargetIntoView(GlobalKey key) async {
       final ctx = key.currentContext;
       if (ctx == null) return;
@@ -195,32 +147,65 @@ class FirstMissionCoach {
       }
     }
 
-    TutorialCoachMark(
-      targets: targets,
-      colorShadow: Colors.black,
-      opacityShadow: 0.78,
-      paddingFocus: 10,
-      pulseEnable: false,
-      alignSkip: Alignment.topRight,
-      textSkip: 'Geç',
-      textStyleSkip: GoogleFonts.notoSans(
+    await scrollTargetIntoView(mainCardKey);
+    final step0 = Completer<void>();
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: mainCardKey,
+      holePadding: const EdgeInsets.all(12),
+      holeBorderRadius: 20,
+      skipTextStyle: GoogleFonts.notoSans(
         color: const Color(0xFF9CA3AF),
         fontSize: 15,
         fontWeight: FontWeight.w600,
       ),
-      showSkipInLastTarget: false,
-      onSkip: () {
-        finishFlow();
-        return true;
-      },
-      onFinish: finishFlow,
-      beforeFocus: (target) async {
-        if (target.identify == _idAction) {
-          await scrollTargetIntoView(mainCardKey);
-        } else if (target.identify == _idChain) {
-          await scrollTargetIntoView(zincirKey);
+      captionAlignment: Alignment.topCenter,
+      captionMargin: const EdgeInsets.fromLTRB(18, 48, 18, 0),
+      caption: stepCard(
+        onAdvance: AppSpotlightLayer.completeCaptionStep,
+        step: 1,
+        title: 'Günün kartını aç',
+        body:
+            'Aksiyonunu burada değil, sözün içinde yaz: karta dokun, aşağı kaydır ve kısa notunu kaydet.',
+        buttonLabel: 'Sonraki',
+      ),
+      onClosed: (reason) {
+        if (reason == AppSpotlightReason.skipped) {
+          finishFlow();
         }
+        if (!step0.isCompleted) step0.complete();
       },
-    ).show(context: context);
+    );
+    await step0.future;
+    AppSpotlightLayer.dismiss();
+
+    await scrollTargetIntoView(zincirKey);
+    final step1 = Completer<void>();
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: zincirKey,
+      holePadding: const EdgeInsets.all(10),
+      holeBorderRadius: 999,
+      skipTextStyle: GoogleFonts.notoSans(
+        color: const Color(0xFF9CA3AF),
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+      ),
+      captionAlignment: Alignment.bottomCenter,
+      captionMargin: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+      caption: stepCard(
+        onAdvance: AppSpotlightLayer.completeCaptionStep,
+        step: 2,
+        title: 'Günlük zincir',
+        body:
+            'Serini ve ilerlemeni buradan takip et; sözü açıp yorumlara da buradan devam edebilirsin.',
+        buttonLabel: 'Tamam',
+      ),
+      onClosed: (reason) {
+        finishFlow();
+        if (!step1.isCompleted) step1.complete();
+      },
+    );
+    await step1.future;
   }
 }

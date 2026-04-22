@@ -114,7 +114,7 @@ class _LoginPageState extends State<LoginPage> {
     await Future<void>.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
     final appleKey = (Platform.isIOS || Platform.isMacOS) ? _appleSignInKey : null;
-    LoginFullTourCoach.show(
+    await LoginFullTourCoach.show(
       context: context,
       introTitleKey: _loginTitleKey,
       googleKey: _googleSignInKey,

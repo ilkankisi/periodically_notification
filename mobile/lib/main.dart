@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import 'widgets/app_spotlight_layer.dart';
 import 'services/api_config.dart';
 import 'services/auth_service.dart';
 import 'services/backend_service.dart';
@@ -342,55 +342,34 @@ class _MainShellState extends State<_MainShell> {
       _profileTabSpotlightScheduled = false;
       return;
     }
-    var tapped = false;
-    TutorialCoachMark(
-      targets: [
-        TargetFocus(
-          identify: 'home_profile_tab_spotlight',
-          keyTarget: _profileTabKey,
-          shape: ShapeLightFocus.RRect,
-          radius: 12,
-          enableTargetTab: true,
-          enableOverlayTab: false,
-          paddingFocus: 6,
-          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-          contents: [
-            TargetContent(
-              align: ContentAlign.top,
-              padding: const EdgeInsets.only(bottom: 12, left: 18, right: 18),
-              builder: (context, controller) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1C1C1E),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF2C2C2E)),
-                ),
-                child: const Text(
-                  'Profil sayfasına geçmek için sağ alttaki PROFİL sekmesine dokun.',
-                  style: TextStyle(
-                    color: Color(0xFFE2E2E2),
-                    fontSize: 14,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ),
-          ],
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: _profileTabKey,
+      holePadding: const EdgeInsets.all(6),
+      holeBorderRadius: 12,
+      onHoleTap: () => _onTabTap(3),
+      caption: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
         ),
-      ],
-      colorShadow: Colors.black,
-      opacityShadow: 0.78,
-      pulseEnable: false,
-      alignSkip: Alignment.topRight,
-      textSkip: 'Geç',
-      onClickTarget: (_) {
-        tapped = true;
-      },
-      onFinish: () {
-        if (!tapped) {
+        child: const Text(
+          'Profil sayfasına geçmek için sağ alttaki PROFİL sekmesine dokun.',
+          style: TextStyle(
+            color: Color(0xFFE2E2E2),
+            fontSize: 14,
+            height: 1.35,
+          ),
+        ),
+      ),
+      onClosed: (reason) {
+        if (reason == AppSpotlightReason.skipped) {
           _profileTabSpotlightScheduled = false;
           return;
         }
+        if (reason != AppSpotlightReason.targetTapped) return;
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           final moved = await OnboardingService.onHomeProfileTabSpotlightTapped();
           if (!mounted) return;
@@ -398,11 +377,7 @@ class _MainShellState extends State<_MainShell> {
           if (moved) _onTabTap(3);
         });
       },
-      onSkip: () {
-        _profileTabSpotlightScheduled = false;
-        return true;
-      },
-    ).show(context: context);
+    );
   }
 
   Future<void> _maybeShowPostBadgesExploreTabSpotlight() async {
@@ -423,55 +398,34 @@ class _MainShellState extends State<_MainShell> {
       _postBadgesExploreTabSpotlightScheduled = false;
       return;
     }
-    var tapped = false;
-    TutorialCoachMark(
-      targets: [
-        TargetFocus(
-          identify: 'post_badges_explore_tab_spotlight',
-          keyTarget: key,
-          shape: ShapeLightFocus.RRect,
-          radius: 12,
-          enableTargetTab: true,
-          enableOverlayTab: false,
-          paddingFocus: 6,
-          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-          contents: [
-            TargetContent(
-              align: ContentAlign.top,
-              padding: const EdgeInsets.only(bottom: 12, left: 18, right: 18),
-              builder: (context, controller) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1C1C1E),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF2C2C2E)),
-                ),
-                child: const Text(
-                  'Keşfet sekmesine dokunarak yeni içeriklere göz at.',
-                  style: TextStyle(
-                    color: Color(0xFFE2E2E2),
-                    fontSize: 14,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ),
-          ],
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: key,
+      holePadding: const EdgeInsets.all(6),
+      holeBorderRadius: 12,
+      onHoleTap: () => _onTabTap(1),
+      caption: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
         ),
-      ],
-      colorShadow: Colors.black,
-      opacityShadow: 0.78,
-      pulseEnable: false,
-      alignSkip: Alignment.topRight,
-      textSkip: 'Geç',
-      onClickTarget: (_) {
-        tapped = true;
-      },
-      onFinish: () {
-        if (!tapped) {
+        child: const Text(
+          'Keşfet sekmesine dokunarak yeni içeriklere göz at.',
+          style: TextStyle(
+            color: Color(0xFFE2E2E2),
+            fontSize: 14,
+            height: 1.35,
+          ),
+        ),
+      ),
+      onClosed: (reason) {
+        if (reason == AppSpotlightReason.skipped) {
           _postBadgesExploreTabSpotlightScheduled = false;
           return;
         }
+        if (reason != AppSpotlightReason.targetTapped) return;
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           final moved = await OnboardingService.onPostBadgesExploreTabTapped();
           if (!mounted) return;
@@ -479,11 +433,7 @@ class _MainShellState extends State<_MainShell> {
           if (moved) _onTabTap(1);
         });
       },
-      onSkip: () {
-        _postBadgesExploreTabSpotlightScheduled = false;
-        return true;
-      },
-    ).show(context: context);
+    );
   }
 
   Future<void> _maybeShowPostBadgesSavedTabSpotlight() async {
@@ -504,55 +454,34 @@ class _MainShellState extends State<_MainShell> {
       _postBadgesSavedTabSpotlightScheduled = false;
       return;
     }
-    var tapped = false;
-    TutorialCoachMark(
-      targets: [
-        TargetFocus(
-          identify: 'post_badges_saved_tab_spotlight',
-          keyTarget: key,
-          shape: ShapeLightFocus.RRect,
-          radius: 12,
-          enableTargetTab: true,
-          enableOverlayTab: false,
-          paddingFocus: 6,
-          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-          contents: [
-            TargetContent(
-              align: ContentAlign.top,
-              padding: const EdgeInsets.only(bottom: 12, left: 18, right: 18),
-              builder: (context, controller) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1C1C1E),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF2C2C2E)),
-                ),
-                child: const Text(
-                  'Kaydettiğin içerikleri Kaydedilenler sekmesinde bulursun; sekmeye dokun.',
-                  style: TextStyle(
-                    color: Color(0xFFE2E2E2),
-                    fontSize: 14,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ),
-          ],
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: key,
+      holePadding: const EdgeInsets.all(6),
+      holeBorderRadius: 12,
+      onHoleTap: () => _onTabTap(2),
+      caption: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
         ),
-      ],
-      colorShadow: Colors.black,
-      opacityShadow: 0.78,
-      pulseEnable: false,
-      alignSkip: Alignment.topRight,
-      textSkip: 'Geç',
-      onClickTarget: (_) {
-        tapped = true;
-      },
-      onFinish: () {
-        if (!tapped) {
+        child: const Text(
+          'Kaydettiğin içerikleri Kaydedilenler sekmesinde bulursun; sekmeye dokun.',
+          style: TextStyle(
+            color: Color(0xFFE2E2E2),
+            fontSize: 14,
+            height: 1.35,
+          ),
+        ),
+      ),
+      onClosed: (reason) {
+        if (reason == AppSpotlightReason.skipped) {
           _postBadgesSavedTabSpotlightScheduled = false;
           return;
         }
+        if (reason != AppSpotlightReason.targetTapped) return;
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           final moved = await OnboardingService.onPostBadgesSavedTabTapped();
           if (!mounted) return;
@@ -560,10 +489,6 @@ class _MainShellState extends State<_MainShell> {
           if (moved) _onTabTap(2);
         });
       },
-      onSkip: () {
-        _postBadgesSavedTabSpotlightScheduled = false;
-        return true;
-      },
-    ).show(context: context);
+    );
   }
 }

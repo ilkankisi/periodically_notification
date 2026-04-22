@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import '../widgets/app_spotlight_layer.dart';
 
 import '../models/gamification_badge.dart';
 import '../services/auth_service.dart';
@@ -36,7 +36,6 @@ class _BadgesPageState extends State<BadgesPage> {
   bool _backCoachMinViewElapsed = false;
   Timer? _backCoachMinViewTimer;
   Timer? _backCoachFallbackTimer;
-  TutorialCoachMark? _badgesBackCoach;
   final GlobalKey _firstActionCardTourKey = GlobalKey();
   bool _fullTourWeeklyTileCoachShown = false;
 
@@ -78,7 +77,7 @@ class _BadgesPageState extends State<BadgesPage> {
   @override
   void dispose() {
     _teardownBackCoachGate();
-    _badgesBackCoach?.removeOverlayEntry();
+    AppSpotlightLayer.removeOverlayEntry();
     GamificationService.onStateChanged.removeListener(_onGamificationChanged);
     _scrollController.dispose();
     super.dispose();
@@ -132,7 +131,7 @@ class _BadgesPageState extends State<BadgesPage> {
     if (!mounted || !widget.firstLaunchPreview || _badgesBackCoachScheduled) return;
     _badgesBackCoachScheduled = true;
     _teardownBackCoachGate();
-    _badgesBackCoach = FirstBadgesBackCoach.show(
+    FirstBadgesBackCoach.show(
       context: context,
       backButtonKey: _backCoachKey,
     );
@@ -154,60 +153,36 @@ class _BadgesPageState extends State<BadgesPage> {
         _fullTourWeeklyTileCoachShown = false;
         return;
       }
-      var tapped = false;
-      TutorialCoachMark(
-        targets: [
-          TargetFocus(
-            identify: 'badges_first_action_card_spotlight',
-            keyTarget: _firstActionCardTourKey,
-            shape: ShapeLightFocus.RRect,
-            radius: 14,
-            enableTargetTab: true,
-            enableOverlayTab: false,
-            paddingFocus: 8,
-            borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-            contents: [
-              TargetContent(
-                align: ContentAlign.top,
-                padding: const EdgeInsets.only(bottom: 12),
-                builder: (c, controller) => Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1C1C1E),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF2C2C2E)),
-                  ),
-                  child: Text(
-                    'Adım 21/28\n\nİlk aksiyon kartın burada. Karta dokun; bir sonraki adımda Keşfet sekmesine yönlendirileceksin.',
-                    style: GoogleFonts.notoSans(
-                      color: const Color(0xFFE2E2E2),
-                      fontSize: 14,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+      AppSpotlightLayer.show(
+        context: context,
+        targetKey: _firstActionCardTourKey,
+        holePadding: const EdgeInsets.all(8),
+        holeBorderRadius: 14,
+        onHoleTap: () {},
+        caption: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF2C2C2E)),
           ),
-        ],
-        colorShadow: Colors.black,
-        opacityShadow: 0.78,
-        pulseEnable: false,
-        alignSkip: Alignment.topRight,
-        textSkip: 'Geç',
-        onClickTarget: (_) {
-          tapped = true;
-        },
-        onFinish: () {
-          if (!tapped) {
-            _fullTourWeeklyTileCoachShown = false;
-            return;
-          }
+          child: Text(
+            'Adım 21/28\n\nİlk aksiyon kartın burada. Karta dokun; bir sonraki adımda Keşfet sekmesine yönlendirileceksin.',
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFFE2E2E2),
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+        ),
+        onClosed: (reason) {
+          _fullTourWeeklyTileCoachShown = false;
+          if (reason == AppSpotlightReason.skipped) return;
+          if (reason != AppSpotlightReason.targetTapped) return;
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             final moved =
                 await OnboardingService.onPostBadgesFirstActionCoachFinished();
             if (!mounted) return;
-            _fullTourWeeklyTileCoachShown = false;
             if (!moved) return;
             if (Navigator.canPop(context)) {
               Navigator.pop(context);
@@ -215,11 +190,7 @@ class _BadgesPageState extends State<BadgesPage> {
             OnboardingService.requestTab(0);
           });
         },
-        onSkip: () {
-          _fullTourWeeklyTileCoachShown = false;
-          return true;
-        },
-      ).show(context: context);
+      );
     });
   }
 

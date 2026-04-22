@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import '../widgets/app_spotlight_layer.dart';
 
 import '../models/motivation.dart';
 import '../widgets/motivation_cached_image.dart';
@@ -130,87 +130,40 @@ class _ExplorePageState extends State<ExplorePage> {
         _postBadgesFirstCardCoachScheduled = false;
         return;
       }
-      var tapped = false;
-      TutorialCoachMark(
-        targets: [
-          TargetFocus(
-            identify: 'post_badges_explore_first_card',
-            keyTarget: _postTourFirstCardKey,
-            shape: ShapeLightFocus.RRect,
-            radius: 16,
-            enableTargetTab: true,
-            enableOverlayTab: false,
-            paddingFocus: 8,
-            borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-            contents: [
-              TargetContent(
-                align: ContentAlign.bottom,
-                padding: const EdgeInsets.only(bottom: 12, left: 18, right: 18),
-                builder: (context, controller) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1C1C1E),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2C2C2E)),
-                  ),
-                  child: Text(
-                    'Bu kartla başla: karta dokunarak içeriği aç ve sonraki adımda kaydet.',
-                    style: GoogleFonts.notoSans(
-                      color: const Color(0xFFE2E2E2),
-                      fontSize: 14,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+      AppSpotlightLayer.show(
+        context: context,
+        targetKey: _postTourFirstCardKey,
+        holePadding: const EdgeInsets.all(8),
+        holeBorderRadius: 16,
+        captionAlignment: Alignment.bottomCenter,
+        captionMargin: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+        caption: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF2C2C2E)),
           ),
-        ],
-        colorShadow: Colors.black,
-        opacityShadow: 0.78,
-        pulseEnable: false,
-        alignSkip: Alignment.topRight,
-        textSkip: 'Geç',
-        onClickTarget: (_) {
-          tapped = true;
-        },
-        onFinish: () {
+          child: Text(
+            'Bu kartla başla: karta dokunarak içeriği aç ve sonraki adımda kaydet.',
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFFE2E2E2),
+              fontSize: 14,
+              height: 1.35,
+            ),
+          ),
+        ),
+        onClosed: (_) {
           _postBadgesFirstCardCoachScheduled = false;
-          if (!tapped || !mounted) return;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted || _filteredItems.isEmpty) return;
-            unawaited(_openFirstCardForPostBadgesTour());
-          });
         },
-        onSkip: () {
-          _postBadgesFirstCardCoachScheduled = false;
-          return true;
-        },
-      ).show(context: context);
+      );
     });
   }
 
-  Future<void> _openFirstCardForPostBadgesTour() async {
-    final item = _filteredItems.first;
-    final moved = await OnboardingService.onPostBadgesExploreFirstCardFinished();
-    if (!mounted) return;
-    if (moved) {
-      setState(
-        () => _fullTourPhaseCache =
-            OnboardingService.ftPostBadgesDetailSaveCard,
-      );
-    }
-    if (!moved) return;
-    if (!mounted) return;
-    await Navigator.push<void>(
-      context,
-      MaterialPageRoute<void>(
-        builder: (context) => ContentDetailPage(item: item),
-      ),
-    );
-  }
-
   Future<void> _onExploreHeroCardTap(Motivation item) async {
+    if (AppSpotlightLayer.isShowing) {
+      AppSpotlightLayer.completeTargetTap();
+    }
     final ftp = await OnboardingService.getGlobalTourStep();
     if (ftp == OnboardingService.ftPostBadgesExploreFirstCard) {
       final first = _filteredItems.isNotEmpty ? _filteredItems.first : null;
