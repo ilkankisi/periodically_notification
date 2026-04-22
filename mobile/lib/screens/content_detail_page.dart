@@ -1015,8 +1015,11 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       if (nav.canPop()) {
         nav.pop();
       }
-      // Full tur: detaydan sonra Profil sekmesi (akış); adım uyuşmazsa Anasayfa.
-      OnboardingService.requestTab(tourBackToProfile ? 3 : 0);
+      // Full turda bu noktada kullanıcıyı önce Anasayfa'ya döndürüp
+      // alt barda Profil sekmesini spotlight ile tıklatıyoruz.
+      if (tourBackToProfile) {
+        OnboardingService.requestTab(0);
+      }
     } finally {
       _handlingTourBackNavigation = false;
     }

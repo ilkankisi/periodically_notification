@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 import 'services/api_config.dart';
 import 'services/auth_service.dart';
 import 'services/backend_service.dart';
@@ -191,6 +192,8 @@ class _MainShell extends StatefulWidget {
 
 class _MainShellState extends State<_MainShell> {
   int _currentIndex = 0;
+  final GlobalKey _profileTabKey = GlobalKey();
+  bool _profileTabSpotlightScheduled = false;
 
   static const _destinations = [
     (icon: Icons.home_outlined, label: 'Anasayfa'),
@@ -204,6 +207,9 @@ class _MainShellState extends State<_MainShell> {
     super.initState();
     OnboardingService.registerTabRequestHandler(_onTabTap);
     unawaited(_prepareDebugTourStart());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_maybeShowProfileTabSpotlight());
+    });
   }
 
   @override
@@ -223,6 +229,7 @@ class _MainShellState extends State<_MainShell> {
     final navBar = BottomNavBar(
       activeIndex: _currentIndex,
       onTabTap: _onTabTap,
+      itemKeys: [null, null, null, _profileTabKey],
     );
     final body = IndexedStack(
       index: _currentIndex,
@@ -281,7 +288,63 @@ class _MainShellState extends State<_MainShell> {
   }
 
   void _onTabTap(int index) {
-    if (index == _currentIndex) return;
-    setState(() => _currentIndex = index);
+    if (index != _currentIndex) {
+      setState(() => _currentIndex = index);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_maybeShowProfileTabSpotlight());
+    });
+  }
+
+  Future<void> _maybeShowProfileTabSpotlight() async {
+    if (!mounted || _profileTabSpotlightScheduled) return;
+    if (MediaQuery.sizeOf(context).width >= 600) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftNeedProfileTabTap) return;
+    _profileTabSpotlightScheduled = true;
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted || _profileTabKey.currentContext == null) {
+      _profileTabSpotlightScheduled = false;
+      return;
+    }
+    var tapped = false;
+    TutorialCoachMark(
+      targets: [
+        TargetFocus(
+          identify: 'home_profile_tab_spotlight',
+          keyTarget: _profileTabKey,
+          shape: ShapeLightFocus.RRect,
+          radius: 12,
+          enableTargetTab: true,
+          enableOverlayTab: false,
+          paddingFocus: 6,
+          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
+          contents: [],
+        ),
+      ],
+      colorShadow: Colors.black,
+      opacityShadow: 0.78,
+      pulseEnable: false,
+      textSkip: 'Geç',
+      onClickTarget: (_) {
+        tapped = true;
+      },
+      onFinish: () {
+        if (!tapped) {
+          _profileTabSpotlightScheduled = false;
+          return;
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final moved = await OnboardingService.onHomeProfileTabSpotlightTapped();
+          if (!mounted) return;
+          _profileTabSpotlightScheduled = false;
+          if (moved) _onTabTap(3);
+        });
+      },
+      onSkip: () {
+        _profileTabSpotlightScheduled = false;
+        return true;
+      },
+    ).show(context: context);
   }
 }
