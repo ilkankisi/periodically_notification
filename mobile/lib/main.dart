@@ -230,7 +230,11 @@ class _MainShellState extends State<_MainShell> {
         HomePage(showBottomBar: false, onTabTap: _onTabTap),
         ExplorePage(showBottomBar: false, onTabTap: _onTabTap),
         SavedPage(showBottomBar: false, onTabTap: _onTabTap),
-        ProfilePage(showBottomBar: false, onTabTap: _onTabTap),
+        ProfilePage(
+          showBottomBar: false,
+          onTabTap: _onTabTap,
+          isMainShellActiveTab: _currentIndex == 3,
+        ),
       ],
     );
 

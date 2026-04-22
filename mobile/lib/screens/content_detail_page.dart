@@ -1008,13 +1008,15 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     if (_handlingTourBackNavigation) return;
     _handlingTourBackNavigation = true;
     try {
-      await OnboardingService.onDetailBackConfirmedToProfile();
+      final tourBackToProfile =
+          await OnboardingService.onDetailBackConfirmedToProfile();
       if (!mounted) return;
       final nav = Navigator.of(context);
       if (nav.canPop()) {
         nav.pop();
       }
-      OnboardingService.requestTab(0);
+      // Full tur: detaydan sonra Profil sekmesi (akış); adım uyuşmazsa Anasayfa.
+      OnboardingService.requestTab(tourBackToProfile ? 3 : 0);
     } finally {
       _handlingTourBackNavigation = false;
     }

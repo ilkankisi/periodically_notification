@@ -25,10 +25,14 @@ class ProfilePage extends StatefulWidget {
     super.key,
     this.showBottomBar = true,
     this.onTabTap,
+    this.isMainShellActiveTab = false,
   });
 
   final bool showBottomBar;
   final ValueChanged<int>? onTabTap;
+
+  /// [main.dart] IndexedStack’te bu sekme seçildiğinde true; tur spotlight’ı yeniden denemek için.
+  final bool isMainShellActiveTab;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -54,6 +58,14 @@ class _ProfilePageState extends State<ProfilePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_maybeShowProfileTourSpotlight());
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfilePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isMainShellActiveTab && widget.isMainShellActiveTab) {
+      unawaited(_maybeShowProfileTourSpotlight());
+    }
   }
 
   @override
