@@ -49,11 +49,17 @@ class _ExplorePageState extends State<ExplorePage> {
   bool _postBadgesFirstCardCoachScheduled = false;
   bool _postBadgesExploreIntroDialogShown = false;
   bool _postBadgesExploreFlowBusy = false;
+  bool _postBadgesExplorePullEndDialogShown = false;
+  bool _postBadgesExplorePullEndDialogInFlight = false;
+  final GlobalKey _postBadgesExploreRefreshKey = GlobalKey();
 
   /// Rozetler sonrası Keşfet adımı: önce bilgi penceresi (mevcut spotlight metinleriyle karıştırılmaz).
   static const String _postBadgesExploreIntroTitle = 'İçeriği aç';
   static const String _postBadgesExploreIntroBody =
       'İlk karttaki içeriğe dokunarak detayı açacaksın; orada turun bir sonraki adımı devam eder.';
+
+  static const String _postBadgesExplorePullEndBody =
+      'Listeyi yenilemek için aşağı çek. Tur burada biter.';
 
   /// ($categoryKey, $uppercaseLabel) — key null = Tümü
   static const List<(String?, String)> _categoryFilters = [
@@ -73,8 +79,15 @@ class _ExplorePageState extends State<ExplorePage> {
   @override
   void initState() {
     super.initState();
+    OnboardingService.registerExploreTourPhaseRefreshHandler(
+      _handleExploreTourPhaseRefreshRequest,
+    );
     _load();
     unawaited(_refreshFullTourPhase());
+  }
+
+  void _handleExploreTourPhaseRefreshRequest() {
+    if (mounted) unawaited(_refreshFullTourPhase());
   }
 
   @override
@@ -95,6 +108,7 @@ class _ExplorePageState extends State<ExplorePage> {
     setState(() => _fullTourPhaseCache = p);
     unawaited(_maybeRunFullTourCoaches());
     unawaited(_maybePostBadgesExploreIntroDialogThenFirstCardCoach());
+    unawaited(_maybeShowPostBadgesExplorePullEndDialog());
   }
 
   Future<void> _maybeRunFullTourCoaches() async {
@@ -313,6 +327,7 @@ class _ExplorePageState extends State<ExplorePage> {
 
   @override
   void dispose() {
+    OnboardingService.registerExploreTourPhaseRefreshHandler(null);
     _searchController.dispose();
     super.dispose();
   }
@@ -350,6 +365,67 @@ class _ExplorePageState extends State<ExplorePage> {
       _searchHistory = history;
     });
     await _refreshFullTourPhase();
+  }
+
+  Future<void> _onExploreRefreshWithTourHook() async {
+    await _load();
+    await OnboardingService.onPostBadgesSavedPullRefreshCompleted();
+    if (!mounted) return;
+    final p = await OnboardingService.getGlobalTourStep();
+    setState(() => _fullTourPhaseCache = p);
+  }
+
+  Future<void> _maybeShowPostBadgesExplorePullEndDialog() async {
+    if (!mounted ||
+        _postBadgesExplorePullEndDialogShown ||
+        _postBadgesExplorePullEndDialogInFlight) {
+      return;
+    }
+    if (widget.shellTabIndex != null && widget.shellTabIndex != 1) return;
+    final p = await OnboardingService.getGlobalTourStep();
+    if (!mounted || p != OnboardingService.ftPostBadgesSavedPullRefresh) {
+      return;
+    }
+    _postBadgesExplorePullEndDialogInFlight = true;
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 280));
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1F1F1F),
+          title: Text(
+            'Keşfet',
+            style: GoogleFonts.notoSans(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
+          content: Text(
+            _postBadgesExplorePullEndBody,
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFFB0B0B0),
+              fontSize: 15,
+              height: 1.45,
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF0095FF),
+              ),
+              child: const Text('Tamam', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      if (mounted) _postBadgesExplorePullEndDialogShown = true;
+    } finally {
+      _postBadgesExplorePullEndDialogInFlight = false;
+    }
   }
 
   Future<void> _clearSearchHistory() async {
@@ -486,10 +562,12 @@ class _ExplorePageState extends State<ExplorePage> {
           children: [
             _buildExploreHeader(),
             Expanded(
-              child: RefreshIndicator(
+              child: KeyedSubtree(
+                key: _postBadgesExploreRefreshKey,
+                child: RefreshIndicator(
                 color: const Color(0xFF0095FF),
                 backgroundColor: const Color(0xFF1F1F1F),
-                onRefresh: _load,
+                onRefresh: _onExploreRefreshWithTourHook,
                 child: CustomScrollView(
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
@@ -565,6 +643,7 @@ class _ExplorePageState extends State<ExplorePage> {
                   ],
                 ),
               ),
+            ),
             ),
             if (widget.showBottomBar)
               BottomNavBar(activeIndex: 1, onTabTap: widget.onTabTap),

@@ -125,6 +125,9 @@ class OnboardingService {
   /// Alt sekme değiştirmek için [main.dart] içindeki kabuk kaydeder.
   static void Function(int tabIndex)? _requestTab;
 
+  /// Keşfet turu: detaydan dönünce sekme zaten 1 iken [ExplorePage] fazını yenilemek için.
+  static VoidCallback? _exploreTourPhaseRefreshHandler;
+
   static void setDebugFirstMissionCoachCycleListener(
     VoidCallback? onCycleDone,
   ) {
@@ -137,6 +140,14 @@ class OnboardingService {
 
   static void requestTab(int index) {
     _requestTab?.call(index);
+  }
+
+  static void registerExploreTourPhaseRefreshHandler(VoidCallback? handler) {
+    _exploreTourPhaseRefreshHandler = handler;
+  }
+
+  static void requestExploreTourPhaseRefresh() {
+    _exploreTourPhaseRefreshHandler?.call();
   }
 
   static Future<bool> isCompleted() async {
@@ -379,7 +390,7 @@ class OnboardingService {
   static Future<bool> onPostBadgesDetailSaveFinished() {
     return moveToStepIfCurrent(
       expectedCurrent: ftPostBadgesDetailSaveCard,
-      nextStep: ftPostBadgesSavedTab,
+      nextStep: ftPostBadgesSavedPullRefresh,
     );
   }
 

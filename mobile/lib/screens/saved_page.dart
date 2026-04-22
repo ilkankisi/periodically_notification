@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 import '../models/motivation.dart';
 import '../widgets/motivation_cached_image.dart';
@@ -34,10 +33,8 @@ class _SavedPageState extends State<SavedPage> {
   int _filterIndex = 0;
 
   final GlobalKey _firstSavedRowTourKey = GlobalKey();
-  final GlobalKey _postBadgesSavedRefreshKey = GlobalKey();
   int? _fullTourPhaseCache;
   bool _savedListCoachScheduled = false;
-  bool _postBadgesPullRefreshCoachPresented = false;
 
   /// Figma 60-555: HEPSİ / MAKALELER / GÖRSELLER
   static const _filters = ['HEPSİ', 'MAKALELER', 'GÖRSELLER'];
@@ -58,7 +55,6 @@ class _SavedPageState extends State<SavedPage> {
     if (!mounted) return;
     setState(() => _fullTourPhaseCache = p);
     await _maybeSavedListCoach();
-    unawaited(_maybePostBadgesPullRefreshCoach());
   }
 
   Future<void> _maybeSavedListCoach() async {
@@ -77,81 +73,12 @@ class _SavedPageState extends State<SavedPage> {
     });
   }
 
-  Future<void> _onRefreshWithTourHook() async {
+  Future<void> _onSavedPullRefresh() async {
     await _load();
     await OnboardingService.onPostBadgesSavedPullRefreshCompleted();
     if (!mounted) return;
     final p = await OnboardingService.getGlobalTourStep();
     setState(() => _fullTourPhaseCache = p);
-  }
-
-  Future<void> _maybePostBadgesPullRefreshCoach() async {
-    if (!mounted || _postBadgesPullRefreshCoachPresented) return;
-    if (_fullTourPhaseCache !=
-        OnboardingService.ftPostBadgesSavedPullRefresh) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Future<void>.delayed(const Duration(milliseconds: 450));
-      if (!mounted || _postBadgesSavedRefreshKey.currentContext == null) {
-        return;
-      }
-      _postBadgesPullRefreshCoachPresented = true;
-      var tapped = false;
-      TutorialCoachMark(
-        targets: [
-          TargetFocus(
-            identify: 'post_badges_saved_pull_refresh',
-            keyTarget: _postBadgesSavedRefreshKey,
-            shape: ShapeLightFocus.RRect,
-            radius: 14,
-            enableTargetTab: true,
-            enableOverlayTab: false,
-            paddingFocus: 8,
-            borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
-            contents: [
-              TargetContent(
-                align: ContentAlign.bottom,
-                padding: const EdgeInsets.only(bottom: 12, left: 18, right: 18),
-                builder: (context, controller) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1C1C1E),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2C2C2E)),
-                  ),
-                  child: Text(
-                    'Listeyi yenilemek için aşağı çek. Tur burada biter.',
-                    style: GoogleFonts.notoSans(
-                      color: const Color(0xFFE2E2E2),
-                      fontSize: 14,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-        colorShadow: Colors.black,
-        opacityShadow: 0.78,
-        pulseEnable: false,
-        alignSkip: Alignment.topRight,
-        textSkip: 'Geç',
-        onClickTarget: (_) {
-          tapped = true;
-        },
-        onFinish: () {
-          if (!tapped) {
-            _postBadgesPullRefreshCoachPresented = false;
-          }
-        },
-        onSkip: () {
-          _postBadgesPullRefreshCoachPresented = false;
-          return true;
-        },
-      ).show(context: context);
-    });
   }
 
   Future<void> _load() async {
@@ -478,12 +405,10 @@ class _SavedPageState extends State<SavedPage> {
   }
 
   Widget _buildEmptyScrollable() {
-    return KeyedSubtree(
-      key: _postBadgesSavedRefreshKey,
-      child: RefreshIndicator(
+    return RefreshIndicator(
       color: const Color(0xFF0095FF),
       backgroundColor: const Color(0xFF1F1F1F),
-      onRefresh: _onRefreshWithTourHook,
+      onRefresh: _onSavedPullRefresh,
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
@@ -498,7 +423,6 @@ class _SavedPageState extends State<SavedPage> {
           );
         },
       ),
-    ),
     );
   }
 
@@ -721,12 +645,10 @@ class _SavedPageState extends State<SavedPage> {
       );
     }
 
-    return KeyedSubtree(
-      key: _postBadgesSavedRefreshKey,
-      child: RefreshIndicator(
+    return RefreshIndicator(
       color: const Color(0xFF0095FF),
       backgroundColor: const Color(0xFF1F1F1F),
-      onRefresh: _onRefreshWithTourHook,
+      onRefresh: _onSavedPullRefresh,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
@@ -742,7 +664,6 @@ class _SavedPageState extends State<SavedPage> {
           return _buildSavedRow(item: item, tourRowKey: tourKey);
         },
       ),
-    ),
     );
   }
 

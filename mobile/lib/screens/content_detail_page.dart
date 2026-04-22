@@ -169,7 +169,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         if (Navigator.canPop(context)) {
           Navigator.pop(context);
         }
-        OnboardingService.requestTab(2);
+        OnboardingService.requestTab(1);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          OnboardingService.requestExploreTourPhaseRefresh();
+        });
       }
     }
   }
