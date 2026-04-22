@@ -1010,7 +1010,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     try {
       await OnboardingService.onDetailBackConfirmedToProfile();
       if (!mounted) return;
-      Navigator.pop(context);
+      final nav = Navigator.of(context);
+      if (nav.canPop()) {
+        nav.pop();
+      }
       OnboardingService.requestTab(0);
     } finally {
       _handlingTourBackNavigation = false;

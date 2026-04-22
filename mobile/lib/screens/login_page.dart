@@ -76,8 +76,13 @@ class _LoginPageState extends State<LoginPage> {
           );
         }
         if (!mounted) return;
-        widget.onSuccess?.call();
-        if (mounted) Navigator.of(context).pop(true);
+        if (widget.onSuccess != null) {
+          // onSuccess zaten üstteki [Login] route'u pop'lar; ikinci pop üstteki
+          // String?/bool tipinde route'u hatalı kapatmaya çalışır.
+          widget.onSuccess!();
+        } else {
+          Navigator.of(context).pop(true);
+        }
       }
     } on Exception catch (e) {
       if (!mounted) return;
