@@ -312,7 +312,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ),
           content: Text(
-            'Adım 1/22\n\nÖnce günün içeriği kartına dokun ve detay sayfasına geç.',
+            'Adım 5/22\n\nÖnce günün içeriği kartına dokun ve detay sayfasına geç.',
             style: GoogleFonts.notoSans(
               color: const Color(0xFF9CA3AF),
               fontSize: 14,

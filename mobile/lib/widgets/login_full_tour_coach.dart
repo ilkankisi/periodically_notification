@@ -154,7 +154,7 @@ class LoginFullTourCoach {
               controller,
               title: 'Tura hoş geldin',
               body: 'Önce giriş yapıp turu başlatıyoruz. Sonrasında anasayfada günlük aksiyon adımına geçeceksin.',
-              stepLabel: 'Adım 4/22',
+              stepLabel: 'Adım 1/22',
             ),
           ),
         ],
@@ -181,7 +181,7 @@ class LoginFullTourCoach {
                   controller,
                   title: 'Apple ile devam',
                   body: 'Apple hesabınla giriş yaparak günlük aksiyonunu paylaşabilirsin.',
-                  stepLabel: 'Adım 4/22',
+                  stepLabel: 'Adım 2/22',
                 ),
               ),
             ],
@@ -210,7 +210,7 @@ class LoginFullTourCoach {
               body: Platform.isAndroid
                   ? 'Google hesabınla giriş yap; ardından ana sayfada bugünkü aksiyonunu yazacaksın.'
                   : 'İstersen Google hesabınla da giriş yapabilirsin.',
-              stepLabel: Platform.isAndroid ? 'Adım 4/22' : 'Adım 4/22',
+              stepLabel: Platform.isAndroid ? 'Adım 2/22' : 'Adım 3/22',
             ),
           ),
         ],

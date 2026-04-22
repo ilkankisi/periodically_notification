@@ -178,7 +178,7 @@ class _BadgesPageState extends State<BadgesPage> {
                     border: Border.all(color: const Color(0xFF2C2C2E)),
                   ),
                   child: Text(
-                    'Adım 7/28\n\nİlk aksiyon kartın burada. Karta dokun; bir sonraki adımda Keşfet sekmesine yönlendirileceksin.',
+                    'Adım 21/28\n\nİlk aksiyon kartın burada. Karta dokun; bir sonraki adımda Keşfet sekmesine yönlendirileceksin.',
                     style: GoogleFonts.notoSans(
                       color: const Color(0xFFE2E2E2),
                       fontSize: 14,

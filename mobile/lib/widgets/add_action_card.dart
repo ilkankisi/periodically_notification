@@ -21,8 +21,10 @@ class AddActionCard extends StatefulWidget {
   final bool showDescription;
   /// Tour/coach için aksiyon butonu hedef anahtarı.
   final GlobalKey? actionButtonKey;
-  /// Metin alanı odaktan çıktığında (yazmayı bitirince) çağrılır; tour spotlight vb.
-  final ValueChanged<String>? onActionNoteFieldUnfocused;
+  /// Kullanıcı metni değiştikçe haber verir (tour tetikleme vb.).
+  final ValueChanged<String>? onNoteChanged;
+  /// Klavye tamam / odak alandan çıkınca (yazmayı bitirince) trimlenmemiş metinle çağrılır.
+  final ValueChanged<String>? onNoteFieldCommitted;
 
   const AddActionCard({
     super.key,
@@ -33,7 +35,8 @@ class AddActionCard extends StatefulWidget {
     this.hintText,
     this.showDescription = true,
     this.actionButtonKey,
-    this.onActionNoteFieldUnfocused,
+    this.onNoteChanged,
+    this.onNoteFieldCommitted,
   });
 
   @override
@@ -42,26 +45,29 @@ class AddActionCard extends StatefulWidget {
 
 class _AddActionCardState extends State<AddActionCard> {
   final TextEditingController _controller = TextEditingController();
-  late final FocusNode _noteFocusNode;
+  final FocusNode _noteFocus = FocusNode(debugLabel: 'add_action_note');
   bool _sending = false;
 
   @override
   void initState() {
     super.initState();
-    _noteFocusNode = FocusNode();
-    _noteFocusNode.addListener(_onNoteFocusChanged);
+    _noteFocus.addListener(_onNoteFocusChange);
   }
 
-  void _onNoteFocusChanged() {
-    if (!_noteFocusNode.hasFocus) {
-      widget.onActionNoteFieldUnfocused?.call(_controller.text);
+  void _onNoteFocusChange() {
+    if (!_noteFocus.hasFocus) {
+      widget.onNoteFieldCommitted?.call(_controller.text);
     }
+  }
+
+  void _emitNoteCommitted() {
+    widget.onNoteFieldCommitted?.call(_controller.text);
   }
 
   @override
   void dispose() {
-    _noteFocusNode.removeListener(_onNoteFocusChanged);
-    _noteFocusNode.dispose();
+    _noteFocus.removeListener(_onNoteFocusChange);
+    _noteFocus.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -236,7 +242,9 @@ class _AddActionCardState extends State<AddActionCard> {
           SizedBox(height: widget.showDescription ? 16 : 14),
           TextField(
             controller: _controller,
-            focusNode: _noteFocusNode,
+            focusNode: _noteFocus,
+            onChanged: widget.onNoteChanged,
+            onEditingComplete: _emitNoteCommitted,
             style: GoogleFonts.notoSans(fontSize: 15, color: Colors.white, height: 1.4),
             decoration: InputDecoration(
               hintText: widget.hintText ?? 'Aksiyonunu buraya yaz...',

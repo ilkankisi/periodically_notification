@@ -22,10 +22,17 @@ import 'content_detail_page.dart';
 
 /// Keşfet sayfası — Figma 60-676: arama, chip filtreler, dikey immersive kart akışı.
 class ExplorePage extends StatefulWidget {
-  const ExplorePage({super.key, this.showBottomBar = true, this.onTabTap});
+  const ExplorePage({
+    super.key,
+    this.showBottomBar = true,
+    this.onTabTap,
+    this.shellTabIndex,
+  });
 
   final bool showBottomBar;
   final ValueChanged<int>? onTabTap;
+  /// Ana kabukta seçili sekme (0–3); tur adımı önbelleğini Keşfet görünür olunca yenilemek için.
+  final int? shellTabIndex;
 
   @override
   State<ExplorePage> createState() => _ExplorePageState();
@@ -40,8 +47,13 @@ class _ExplorePageState extends State<ExplorePage> {
   int? _fullTourPhaseCache;
   bool _fullTourIntroScheduled = false;
   bool _postBadgesFirstCardCoachScheduled = false;
-  /// Post-rozet Keşfet adımında kart spotlight’ından önce bilgi diyaloğu bir kez.
-  bool _postBadgesExploreOpenContentPrefaceDone = false;
+  bool _postBadgesExploreIntroDialogShown = false;
+  bool _postBadgesExploreFlowBusy = false;
+
+  /// Rozetler sonrası Keşfet adımı: önce bilgi penceresi (mevcut spotlight metinleriyle karıştırılmaz).
+  static const String _postBadgesExploreIntroTitle = 'İçeriği aç';
+  static const String _postBadgesExploreIntroBody =
+      'İlk karttaki içeriğe dokunarak detayı açacaksın; orada turun bir sonraki adımı devam eder.';
 
   /// ($categoryKey, $uppercaseLabel) — key null = Tümü
   static const List<(String?, String)> _categoryFilters = [
@@ -65,13 +77,24 @@ class _ExplorePageState extends State<ExplorePage> {
     unawaited(_refreshFullTourPhase());
   }
 
+  @override
+  void didUpdateWidget(covariant ExplorePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final idx = widget.shellTabIndex;
+    if (idx != null &&
+        idx == 1 &&
+        oldWidget.shellTabIndex != idx) {
+      unawaited(_refreshFullTourPhase());
+    }
+  }
+
   Future<void> _refreshFullTourPhase() async {
     await OnboardingService.ensureFullTourMigrated();
     final p = await OnboardingService.getGlobalTourStep();
     if (!mounted) return;
     setState(() => _fullTourPhaseCache = p);
     unawaited(_maybeRunFullTourCoaches());
-    unawaited(_maybePostBadgesFirstCardCoach());
+    unawaited(_maybePostBadgesExploreIntroDialogThenFirstCardCoach());
   }
 
   Future<void> _maybeRunFullTourCoaches() async {
@@ -119,76 +142,63 @@ class _ExplorePageState extends State<ExplorePage> {
     }
   }
 
-  Future<void> _showPostBadgesExploreOpenContentPreface() async {
-    if (!mounted) return;
-    const accent = Color(0xFF0095FF);
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1C1C1E),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'İçeriği aç',
-                  style: GoogleFonts.newsreader(
-                    color: const Color(0xFFE2E2E2),
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+  Future<void> _maybePostBadgesExploreIntroDialogThenFirstCardCoach() async {
+    if (!mounted || _postBadgesExploreFlowBusy) return;
+    final p = await OnboardingService.getGlobalTourStep();
+    if (!mounted || p != OnboardingService.ftPostBadgesExploreFirstCard) {
+      return;
+    }
+    if (_filteredItems.isEmpty) return;
+    _postBadgesExploreFlowBusy = true;
+    try {
+      if (!_postBadgesExploreIntroDialogShown) {
+        await Future<void>.delayed(const Duration(milliseconds: 220));
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: true,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF1F1F1F),
+            title: Text(
+              _postBadgesExploreIntroTitle,
+              style: GoogleFonts.notoSans(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0x14FFFFFF),
-                  borderRadius: BorderRadius.circular(999),
+            ),
+            content: Text(
+              _postBadgesExploreIntroBody,
+              style: GoogleFonts.notoSans(
+                color: const Color(0xFFB0B0B0),
+                fontSize: 15,
+                height: 1.45,
+              ),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF0095FF),
                 ),
-                child: Text(
-                  'Adım 23/28',
-                  style: GoogleFonts.notoSans(
-                    color: const Color(0xFFD1D5DB),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                child: const Text('Tamam', style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
-          content: Text(
-            'Spotlight ile işaretlenen karta dokunarak içeriğe gidin; sonraki adımda Sakla ile kütüphanenize eklenecek.',
-            style: GoogleFonts.notoSans(
-              color: const Color(0xFF9CA3AF),
-              fontSize: 14,
-              height: 1.45,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              style: TextButton.styleFrom(foregroundColor: accent),
-              child: Text(
-                'Tamam',
-                style: GoogleFonts.notoSans(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
         );
-      },
-    );
+        if (!mounted) return;
+        _postBadgesExploreIntroDialogShown = true;
+      }
+      await _maybePostBadgesFirstCardCoach();
+    } finally {
+      _postBadgesExploreFlowBusy = false;
+    }
   }
 
   Future<void> _maybePostBadgesFirstCardCoach() async {
     if (!mounted || _postBadgesFirstCardCoachScheduled) return;
-    final p =
-        _fullTourPhaseCache ?? await OnboardingService.getGlobalTourStep();
-    if (p != OnboardingService.ftPostBadgesExploreFirstCard) return;
+    final p = await OnboardingService.getGlobalTourStep();
+    if (!mounted || p != OnboardingService.ftPostBadgesExploreFirstCard) return;
     if (_filteredItems.isEmpty) return;
     _postBadgesFirstCardCoachScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -196,18 +206,6 @@ class _ExplorePageState extends State<ExplorePage> {
       if (!mounted || _postTourFirstCardKey.currentContext == null) {
         _postBadgesFirstCardCoachScheduled = false;
         return;
-      }
-      if (!_postBadgesExploreOpenContentPrefaceDone) {
-        await _showPostBadgesExploreOpenContentPreface();
-        _postBadgesExploreOpenContentPrefaceDone = true;
-        if (!mounted) {
-          _postBadgesFirstCardCoachScheduled = false;
-          return;
-        }
-        if (_postTourFirstCardKey.currentContext == null) {
-          _postBadgesFirstCardCoachScheduled = false;
-          return;
-        }
       }
       var tapped = false;
       TutorialCoachMark(

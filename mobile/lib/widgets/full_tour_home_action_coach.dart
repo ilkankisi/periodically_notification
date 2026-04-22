@@ -77,7 +77,7 @@ class FullTourHomeActionCoach {
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        'Adım 1/22',
+                        'Adım 5/22',
                         style: GoogleFonts.notoSans(
                           color: const Color(0xFFD1D5DB),
                           fontSize: 11,
@@ -90,7 +90,7 @@ class FullTourHomeActionCoach {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'İçeriğe bakmak için spotlightı takip et',
+                  'Aksiyonunu sözün içinde yaz',
                   style: GoogleFonts.newsreader(
                     color: const Color(0xFFE2E2E2),
                     fontSize: 20,
@@ -100,12 +100,33 @@ class FullTourHomeActionCoach {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Önce günün kartına dokun.',
+                  'Önce günün kartına dokun; açılan sayfada aşağı kaydırıp bugün ne yaptığını kaydedebilirsin.',
                   style: GoogleFonts.notoSans(
                     color: muted,
                     fontSize: 14,
                     height: 1.45,
                     fontWeight: FontWeight.w400,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: controller.next,
+                    style: TextButton.styleFrom(
+                      foregroundColor: accent,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                    ),
+                    child: Text(
+                      'Tamam',
+                      style: GoogleFonts.notoSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
               ],

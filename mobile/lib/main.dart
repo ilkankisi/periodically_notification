@@ -245,7 +245,11 @@ class _MainShellState extends State<_MainShell> {
       index: _currentIndex,
       children: [
         HomePage(showBottomBar: false, onTabTap: _onTabTap),
-        ExplorePage(showBottomBar: false, onTabTap: _onTabTap),
+        ExplorePage(
+          showBottomBar: false,
+          onTabTap: _onTabTap,
+          shellTabIndex: _currentIndex,
+        ),
         SavedPage(showBottomBar: false, onTabTap: _onTabTap),
         ProfilePage(
           showBottomBar: false,

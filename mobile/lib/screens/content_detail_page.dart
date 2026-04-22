@@ -125,9 +125,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     _detailReadCoachShown = true;
     await _showDetailInfoPopup(
       title: 'İçeriği oku',
-      stepLabel: 'Adım 2/22',
+      stepLabel: 'Adım 16/22',
       body:
-          'Spotlightı takip ederek metin gövdesini okuduktan sonra o alana dokun. Sonraki adımda aksiyonunu yazacaksın.',
+          'Kırmızıyla vurgulanan metin gövdesini okuduktan sonra o alana dokun. Sonraki adımda aksiyonunu yazacaksın.',
     );
     if (!mounted) return;
     await Future<void>.delayed(const Duration(milliseconds: 180));
@@ -932,7 +932,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   border: Border.all(color: const Color(0xFF2C2C2E)),
                 ),
                 child: Text(
-                  'Adım 3/22\n\nKarta bir kez dokunup spotlightı kapat; sonra aksiyonunu yazıp `Aksiyon Ekle` ile kaydet.',
+                  'Adım 17/22\n\nKarta bir kez dokunup spotlightı kapat; sonra aksiyonunu yazıp `Aksiyon Ekle` ile kaydet.',
                   style: GoogleFonts.notoSans(
                     color: const Color(0xFFE2E2E2),
                     fontSize: 14,
@@ -958,7 +958,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     _detailBackPopupShown = true;
     await _showDetailInfoPopup(
       title: 'Anasayfaya dön',
-      stepLabel: 'Adım 5/22',
+      stepLabel: 'Adım 18/22',
       body:
           'Aksiyon kaydedildi. Şimdi sol üstteki geri oka basıp Anasayfa ekranına dön.',
     );
@@ -1382,7 +1382,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                             quoteId: widget.item.id,
                             quoteTitle: widget.item.title,
                             actionButtonKey: _detailActionButtonKey,
-                            onActionNoteFieldUnfocused: (value) {
+                            onNoteFieldCommitted: (value) {
                               unawaited(_maybeShowActionButtonSpotlight(value));
                             },
                             onActionSaved: () async {
