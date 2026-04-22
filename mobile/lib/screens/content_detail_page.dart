@@ -187,6 +187,21 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       _postBadgesSaveLibraryCoachScheduled = false;
       return;
     }
+    final saveCtx = _postTourSaveCardKey.currentContext;
+    if (saveCtx == null || !saveCtx.mounted) {
+      _postBadgesSaveLibraryCoachScheduled = false;
+      return;
+    }
+    await Scrollable.ensureVisible(
+      saveCtx,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      alignment: 0.22,
+    );
+    if (!mounted || _postTourSaveCardKey.currentContext == null) {
+      _postBadgesSaveLibraryCoachScheduled = false;
+      return;
+    }
     var tapped = false;
     TutorialCoachMark(
       targets: [
