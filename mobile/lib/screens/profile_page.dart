@@ -46,6 +46,7 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _isLoggedIn = false;
   GamificationSnapshot? _gamification;
   final GlobalKey _profileHeroTourKey = GlobalKey();
+  final GlobalKey _profileBadgesSeeAllKey = GlobalKey();
   bool _profileTourScheduled = false;
 
   @override
@@ -135,19 +136,23 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _maybeShowProfileTourSpotlight() async {
     if (!mounted || _profileTourScheduled || !_isLoggedIn) return;
     final ftp = await OnboardingService.getGlobalTourStep();
-    if (ftp != OnboardingService.ftProfileSpotlight) return;
+    if (ftp != OnboardingService.ftBadgesAfterTourComment) return;
     _profileTourScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await Future<void>.delayed(const Duration(milliseconds: 280));
-      if (!mounted) return;
+      if (!mounted || _profileBadgesSeeAllKey.currentContext == null) {
+        _profileTourScheduled = false;
+        return;
+      }
+      var openedBadges = false;
       TutorialCoachMark(
         targets: [
           TargetFocus(
-            identify: 'profile_hero_spotlight',
-            keyTarget: _profileHeroTourKey,
+            identify: 'profile_badges_see_all_spotlight',
+            keyTarget: _profileBadgesSeeAllKey,
             shape: ShapeLightFocus.RRect,
-            radius: 20,
-            enableTargetTab: false,
+            radius: 10,
+            enableTargetTab: true,
             enableOverlayTab: false,
             paddingFocus: 8,
             borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
@@ -163,7 +168,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     border: Border.all(color: const Color(0xFF2C2C2E)),
                   ),
                   child: Text(
-                    'Adım 22/22\n\nProfil sayfasına geldin. Tur tamamlandı.',
+                    'Adım 20/22\n\nRozetlerini görmek için `Tümünü Gör` butonuna bas.',
                     style: GoogleFonts.notoSans(
                       color: const Color(0xFFE2E2E2),
                       fontSize: 14,
@@ -179,12 +184,29 @@ class _ProfilePageState extends State<ProfilePage> {
         opacityShadow: 0.78,
         pulseEnable: false,
         textSkip: 'Geç',
-        onSkip: () {
-          unawaited(OnboardingService.setGlobalTourStep(OnboardingService.ftFullTourDone));
-          return true;
+        onClickTarget: (_) {
+          openedBadges = true;
         },
         onFinish: () {
-          unawaited(OnboardingService.setGlobalTourStep(OnboardingService.ftFullTourDone));
+          if (!openedBadges) {
+            _profileTourScheduled = false;
+            return;
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            final moved = await OnboardingService.onProfileBadgesSeeAllTapped();
+            if (!mounted) return;
+            _profileTourScheduled = false;
+            if (!moved) return;
+            await Navigator.push<void>(
+              context,
+              MaterialPageRoute<void>(builder: (_) => const BadgesPage()),
+            );
+            if (mounted) await _refreshGamification();
+          });
+        },
+        onSkip: () {
+          _profileTourScheduled = false;
+          return true;
         },
       ).show(context: context);
     });
@@ -569,7 +591,10 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   TextButton(
+                    key: _profileBadgesSeeAllKey,
                     onPressed: () async {
+                      await OnboardingService.onProfileBadgesSeeAllTapped();
+                      if (!mounted) return;
                       await Navigator.push<void>(
                         context,
                         MaterialPageRoute<void>(builder: (_) => const BadgesPage()),

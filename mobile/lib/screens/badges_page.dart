@@ -11,6 +11,7 @@ import '../services/content_sync_service.dart';
 import '../services/daily_action_onboarding_helper.dart';
 import '../services/gamification_service.dart';
 import '../services/motivation_service.dart';
+import '../services/onboarding_service.dart';
 import '../widgets/add_action_card.dart';
 import '../widgets/app_top_bar.dart';
 import '../widgets/first_badges_back_coach.dart';
@@ -40,6 +41,8 @@ class _BadgesPageState extends State<BadgesPage> {
   Timer? _backCoachMinViewTimer;
   Timer? _backCoachFallbackTimer;
   TutorialCoachMark? _badgesBackCoach;
+  final GlobalKey _weeklyStreakTileTourKey = GlobalKey();
+  bool _fullTourWeeklyTileCoachShown = false;
 
   /// Kaydırma ile tetiklemek için toplam ofset (küçük kaydırmalar tek seferde spotlight açmasın).
   static const double _kBackCoachScrollThresholdPx = 140;
@@ -142,6 +145,75 @@ class _BadgesPageState extends State<BadgesPage> {
   void _onGamificationChanged() {
     if (widget.firstLaunchPreview && !AuthService.isLoggedIn) return;
     if (mounted) setState(() => _future = _load());
+  }
+
+  Future<void> _maybeShowFullTourWeeklyTileCoach() async {
+    if (!mounted || _fullTourWeeklyTileCoachShown) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftProfileSpotlight) return;
+    _fullTourWeeklyTileCoachShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 220));
+      if (!mounted || _weeklyStreakTileTourKey.currentContext == null) {
+        _fullTourWeeklyTileCoachShown = false;
+        return;
+      }
+      var tapped = false;
+      TutorialCoachMark(
+        targets: [
+          TargetFocus(
+            identify: 'badges_weekly_tile_spotlight',
+            keyTarget: _weeklyStreakTileTourKey,
+            shape: ShapeLightFocus.RRect,
+            radius: 14,
+            enableTargetTab: true,
+            enableOverlayTab: false,
+            paddingFocus: 8,
+            borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
+            contents: [
+              TargetContent(
+                align: ContentAlign.top,
+                padding: const EdgeInsets.only(bottom: 12),
+                builder: (c, controller) => Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1C1C1E),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: Text(
+                    'Adım 21/22\n\nİlk zincir rozetin burada görünüyor. Karta dokunarak turu tamamla.',
+                    style: GoogleFonts.notoSans(
+                      color: const Color(0xFFE2E2E2),
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        colorShadow: Colors.black,
+        opacityShadow: 0.78,
+        pulseEnable: false,
+        textSkip: 'Geç',
+        onClickTarget: (_) {
+          tapped = true;
+        },
+        onFinish: () {
+          if (!tapped) {
+            _fullTourWeeklyTileCoachShown = false;
+            return;
+          }
+          unawaited(OnboardingService.setGlobalTourStep(OnboardingService.ftFullTourDone));
+        },
+        onSkip: () {
+          _fullTourWeeklyTileCoachShown = false;
+          return true;
+        },
+      ).show(context: context);
+    });
   }
 
   Future<_BadgeViewModel> _load() async {
@@ -287,6 +359,7 @@ class _BadgesPageState extends State<BadgesPage> {
         final earned = GamificationBadgeDef.catalog.where((b) => vm.unlocked.contains(b.id)).length;
         final total = GamificationBadgeDef.catalog.length;
         final progress = total > 0 ? earned / total : 0.0;
+        unawaited(_maybeShowFullTourWeeklyTileCoach());
 
         if (widget.firstLaunchPreview &&
             !_firstLaunchBackCoachGateDone &&
@@ -386,10 +459,14 @@ class _BadgesPageState extends State<BadgesPage> {
                 ],
                 ...GamificationBadgeDef.catalog.map((b) {
                   final on = vm.unlocked.contains(b.id);
-                  return Padding(
+                  final tile = Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _BadgeTileFigma(badge: b, unlocked: on),
                   );
+                  if (b.id == 'streak_7') {
+                    return KeyedSubtree(key: _weeklyStreakTileTourKey, child: tile);
+                  }
+                  return tile;
                 }),
                 const SizedBox(height: 8),
                 _buildInfoFooter(),

@@ -302,6 +302,13 @@ class OnboardingService {
   static Future<bool> onHomeProfileTabSpotlightTapped() {
     return moveToStepIfCurrent(
       expectedCurrent: ftNeedProfileTabTap,
+      nextStep: ftBadgesAfterTourComment,
+    );
+  }
+
+  static Future<bool> onProfileBadgesSeeAllTapped() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftBadgesAfterTourComment,
       nextStep: ftProfileSpotlight,
     );
   }
