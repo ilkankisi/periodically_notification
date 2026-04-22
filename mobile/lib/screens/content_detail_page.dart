@@ -74,6 +74,8 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   /// Geri spotlight hedefine dokunuldu; coach [onFinish] ile kapandıktan sonra anasayfaya dön.
   bool _detailBackSpotlightTargetTapped = false;
   bool _handlingTourBackNavigation = false;
+  final GlobalKey _postTourSaveCardKey = GlobalKey();
+  bool _postBadgesSaveLibraryCoachScheduled = false;
 
   @override
   void initState() {
@@ -87,6 +89,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_maybeStartFullTourDetailFlow());
+      unawaited(_maybeShowPostBadgesSaveLibraryCoach());
     });
     if (widget.onboardingV1ComposerCoach && AuthService.isLoggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -152,8 +155,88 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   }
 
   Future<void> _toggleSaved() async {
+    final beforeStep = await OnboardingService.getGlobalTourStep();
+    final wasUnsaved = !_saved;
     final nowSaved = await SavedItemsService.toggleSaved(widget.item.id);
+    if (!mounted) return;
     setState(() => _saved = nowSaved);
+    if (beforeStep == OnboardingService.ftPostBadgesDetailSaveCard &&
+        nowSaved &&
+        wasUnsaved) {
+      final moved = await OnboardingService.onPostBadgesDetailSaveFinished();
+      if (!mounted) return;
+      if (moved) {
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+        OnboardingService.requestTab(2);
+      }
+    }
+  }
+
+  Future<void> _maybeShowPostBadgesSaveLibraryCoach() async {
+    if (!mounted || _postBadgesSaveLibraryCoachScheduled) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftPostBadgesDetailSaveCard) return;
+    _postBadgesSaveLibraryCoachScheduled = true;
+    await Future<void>.delayed(const Duration(milliseconds: 380));
+    if (!mounted || _postTourSaveCardKey.currentContext == null) {
+      _postBadgesSaveLibraryCoachScheduled = false;
+      return;
+    }
+    var tapped = false;
+    TutorialCoachMark(
+      targets: [
+        TargetFocus(
+          identify: 'post_badges_detail_save_card',
+          keyTarget: _postTourSaveCardKey,
+          shape: ShapeLightFocus.RRect,
+          radius: 14,
+          enableTargetTab: true,
+          enableOverlayTab: false,
+          paddingFocus: 8,
+          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
+          contents: [
+            TargetContent(
+              align: ContentAlign.top,
+              padding: const EdgeInsets.only(bottom: 12, left: 18, right: 18),
+              builder: (context, controller) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1C1E),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2C2C2E)),
+                ),
+                child: Text(
+                  'Bu içeriği Sakla kartına dokunarak kütüphanene ekle.',
+                  style: GoogleFonts.notoSans(
+                    color: const Color(0xFFE2E2E2),
+                    fontSize: 14,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+      colorShadow: Colors.black,
+      opacityShadow: 0.78,
+      pulseEnable: false,
+      alignSkip: Alignment.topRight,
+      textSkip: 'Geç',
+      onClickTarget: (_) {
+        tapped = true;
+      },
+      onFinish: () {
+        _postBadgesSaveLibraryCoachScheduled = false;
+        if (!tapped) return;
+      },
+      onSkip: () {
+        _postBadgesSaveLibraryCoachScheduled = false;
+        return true;
+      },
+    ).show(context: context);
   }
 
   List<Comment> _orderedComments() {
@@ -1288,7 +1371,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                           _buildReadableBodyText(bodyParts.$2),
                         ],
                         const SizedBox(height: 28),
-                        _buildSaveLibraryCard(),
+                        KeyedSubtree(
+                          key: _postTourSaveCardKey,
+                          child: _buildSaveLibraryCard(),
+                        ),
                         const SizedBox(height: 20),
                         KeyedSubtree(
                           key: _detailActionCardKey,

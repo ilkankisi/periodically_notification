@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 import '../models/motivation.dart';
 import '../widgets/motivation_cached_image.dart';
@@ -35,8 +36,10 @@ class _ExplorePageState extends State<ExplorePage> {
 
   final GlobalKey _exploreHeaderKey = GlobalKey();
   final GlobalKey _firstBookmarkKey = GlobalKey();
+  final GlobalKey _postTourFirstCardKey = GlobalKey();
   int? _fullTourPhaseCache;
   bool _fullTourIntroScheduled = false;
+  bool _postBadgesFirstCardCoachScheduled = false;
 
   /// ($categoryKey, $uppercaseLabel) — key null = Tümü
   static const List<(String?, String)> _categoryFilters = [
@@ -66,11 +69,13 @@ class _ExplorePageState extends State<ExplorePage> {
     if (!mounted) return;
     setState(() => _fullTourPhaseCache = p);
     unawaited(_maybeRunFullTourCoaches());
+    unawaited(_maybePostBadgesFirstCardCoach());
   }
 
   Future<void> _maybeRunFullTourCoaches() async {
     final p =
         _fullTourPhaseCache ?? await OnboardingService.getGlobalTourStep();
+    if (p >= OnboardingService.ftPostBadgesExploreTab) return;
     if (p == OnboardingService.ftExploreIntro && !_fullTourIntroScheduled) {
       _fullTourIntroScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -110,6 +115,123 @@ class _ExplorePageState extends State<ExplorePage> {
         );
       });
     }
+  }
+
+  Future<void> _maybePostBadgesFirstCardCoach() async {
+    if (!mounted || _postBadgesFirstCardCoachScheduled) return;
+    final p =
+        _fullTourPhaseCache ?? await OnboardingService.getGlobalTourStep();
+    if (p != OnboardingService.ftPostBadgesExploreFirstCard) return;
+    if (_filteredItems.isEmpty) return;
+    _postBadgesFirstCardCoachScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 420));
+      if (!mounted || _postTourFirstCardKey.currentContext == null) {
+        _postBadgesFirstCardCoachScheduled = false;
+        return;
+      }
+      var tapped = false;
+      TutorialCoachMark(
+        targets: [
+          TargetFocus(
+            identify: 'post_badges_explore_first_card',
+            keyTarget: _postTourFirstCardKey,
+            shape: ShapeLightFocus.RRect,
+            radius: 16,
+            enableTargetTab: true,
+            enableOverlayTab: false,
+            paddingFocus: 8,
+            borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
+            contents: [
+              TargetContent(
+                align: ContentAlign.bottom,
+                padding: const EdgeInsets.only(bottom: 12, left: 18, right: 18),
+                builder: (context, controller) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1C1C1E),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: Text(
+                    'Bu kartla başla: karta dokunarak içeriği aç ve sonraki adımda kaydet.',
+                    style: GoogleFonts.notoSans(
+                      color: const Color(0xFFE2E2E2),
+                      fontSize: 14,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        colorShadow: Colors.black,
+        opacityShadow: 0.78,
+        pulseEnable: false,
+        alignSkip: Alignment.topRight,
+        textSkip: 'Geç',
+        onClickTarget: (_) {
+          tapped = true;
+        },
+        onFinish: () {
+          _postBadgesFirstCardCoachScheduled = false;
+          if (!tapped || !mounted) return;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _filteredItems.isEmpty) return;
+            unawaited(_openFirstCardForPostBadgesTour());
+          });
+        },
+        onSkip: () {
+          _postBadgesFirstCardCoachScheduled = false;
+          return true;
+        },
+      ).show(context: context);
+    });
+  }
+
+  Future<void> _openFirstCardForPostBadgesTour() async {
+    final item = _filteredItems.first;
+    final moved = await OnboardingService.onPostBadgesExploreFirstCardFinished();
+    if (!mounted) return;
+    if (moved) {
+      setState(
+        () => _fullTourPhaseCache =
+            OnboardingService.ftPostBadgesDetailSaveCard,
+      );
+    }
+    if (!moved) return;
+    if (!mounted) return;
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (context) => ContentDetailPage(item: item),
+      ),
+    );
+  }
+
+  Future<void> _onExploreHeroCardTap(Motivation item) async {
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp == OnboardingService.ftPostBadgesExploreFirstCard) {
+      final first = _filteredItems.isNotEmpty ? _filteredItems.first : null;
+      if (first != null && first.id == item.id) {
+        final moved = await OnboardingService.onPostBadgesExploreFirstCardFinished();
+        if (!mounted) return;
+        if (moved) {
+          setState(
+            () => _fullTourPhaseCache =
+                OnboardingService.ftPostBadgesDetailSaveCard,
+          );
+        }
+      }
+    }
+    if (!mounted) return;
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (context) => ContentDetailPage(item: item),
+      ),
+    );
   }
 
   @override
@@ -342,13 +464,23 @@ class _ExplorePageState extends State<ExplorePage> {
                             final bookmarkKey = (index == 0 && tourSave)
                                 ? _firstBookmarkKey
                                 : null;
+                            final postTourFirst =
+                                _fullTourPhaseCache ==
+                                    OnboardingService
+                                        .ftPostBadgesExploreFirstCard;
+                            final postTourCardKey =
+                                (index == 0 && _searchQuery.isEmpty && postTourFirst)
+                                ? _postTourFirstCardKey
+                                : null;
+                            Widget card = _buildExploreHeroCard(
+                              item,
+                              featured: featured,
+                              tourBookmarkKey: bookmarkKey,
+                              tourFirstCardKey: postTourCardKey,
+                            );
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 16),
-                              child: _buildExploreHeroCard(
-                                item,
-                                featured: featured,
-                                tourBookmarkKey: bookmarkKey,
-                              ),
+                              child: card,
                             );
                           }, childCount: filtered.length),
                         ),
@@ -575,13 +707,14 @@ class _ExplorePageState extends State<ExplorePage> {
     Motivation item, {
     bool featured = false,
     GlobalKey? tourBookmarkKey,
+    GlobalKey? tourFirstCardKey,
   }) {
     final imageUrl = item.displayImageUrl ?? '';
     final saved = _savedIds.contains(item.id);
     final categoryLabel = (item.category ?? 'İçerik').toUpperCase();
     final h = featured ? 300.0 : 268.0;
 
-    return ClipRRect(
+    final outer = ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: SizedBox(
         height: h,
@@ -590,12 +723,7 @@ class _ExplorePageState extends State<ExplorePage> {
           fit: StackFit.expand,
           children: [
             GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ContentDetailPage(item: item),
-                ),
-              ),
+              onTap: () => unawaited(_onExploreHeroCardTap(item)),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -731,6 +859,10 @@ class _ExplorePageState extends State<ExplorePage> {
         ),
       ),
     );
+    if (tourFirstCardKey != null) {
+      return KeyedSubtree(key: tourFirstCardKey, child: outer);
+    }
+    return outer;
   }
 
   Widget _wrapTourKey(GlobalKey? key, Widget child) {

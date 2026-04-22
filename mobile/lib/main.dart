@@ -193,7 +193,15 @@ class _MainShell extends StatefulWidget {
 class _MainShellState extends State<_MainShell> {
   int _currentIndex = 0;
   final GlobalKey _profileTabKey = GlobalKey();
+  final GlobalKey _exploreTabKey = GlobalKey();
+  final GlobalKey _savedTabKey = GlobalKey();
+  final GlobalKey _exploreRailIdleKey = GlobalKey();
+  final GlobalKey _exploreRailSelectedKey = GlobalKey();
+  final GlobalKey _savedRailIdleKey = GlobalKey();
+  final GlobalKey _savedRailSelectedKey = GlobalKey();
   bool _profileTabSpotlightScheduled = false;
+  bool _postBadgesExploreTabSpotlightScheduled = false;
+  bool _postBadgesSavedTabSpotlightScheduled = false;
 
   static const _destinations = [
     (icon: Icons.home_outlined, label: 'Anasayfa'),
@@ -209,6 +217,8 @@ class _MainShellState extends State<_MainShell> {
     unawaited(_prepareDebugTourStart());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_maybeShowProfileTabSpotlight());
+      unawaited(_maybeShowPostBadgesExploreTabSpotlight());
+      unawaited(_maybeShowPostBadgesSavedTabSpotlight());
     });
   }
 
@@ -229,7 +239,7 @@ class _MainShellState extends State<_MainShell> {
     final navBar = BottomNavBar(
       activeIndex: _currentIndex,
       onTabTap: _onTabTap,
-      itemKeys: [null, null, null, _profileTabKey],
+      itemKeys: [null, _exploreTabKey, _savedTabKey, _profileTabKey],
     );
     final body = IndexedStack(
       index: _currentIndex,
@@ -255,24 +265,20 @@ class _MainShellState extends State<_MainShell> {
               selectedIndex: _currentIndex,
               onDestinationSelected: _onTabTap,
               labelType: NavigationRailLabelType.all,
-              destinations: _destinations
-                  .map(
-                    (d) => NavigationRailDestination(
-                      icon: Icon(d.icon, color: const Color(0xFF9CA3AF)),
-                      selectedIcon: Icon(
-                        d.icon,
-                        color: const Color(0xFF0095FF),
-                      ),
-                      label: Text(
-                        d.label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
+              destinations: [
+                for (var i = 0; i < _destinations.length; i++)
+                  NavigationRailDestination(
+                    icon: _railLeadingIcon(i, false),
+                    selectedIcon: _railLeadingIcon(i, true),
+                    label: Text(
+                      _destinations[i].label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
                       ),
                     ),
-                  )
-                  .toList(),
+                  ),
+              ],
             ),
             Expanded(child: body),
           ],
@@ -287,12 +293,41 @@ class _MainShellState extends State<_MainShell> {
     );
   }
 
+  /// NavigationRail hem [icon] hem [selectedIcon] ağacında tuttuğu için iki ayrı anahtar.
+  GlobalKey _pickRailSpotlightKey(GlobalKey idle, GlobalKey selected) {
+    if (selected.currentContext != null) return selected;
+    if (idle.currentContext != null) return idle;
+    return selected;
+  }
+
+  Widget _railLeadingIcon(int index, bool selected) {
+    final d = _destinations[index];
+    final icon = Icon(
+      d.icon,
+      color: selected
+          ? const Color(0xFF0095FF)
+          : const Color(0xFF9CA3AF),
+    );
+    final GlobalKey? key;
+    if (index == 1) {
+      key = selected ? _exploreRailSelectedKey : _exploreRailIdleKey;
+    } else if (index == 2) {
+      key = selected ? _savedRailSelectedKey : _savedRailIdleKey;
+    } else {
+      key = null;
+    }
+    if (key != null) return KeyedSubtree(key: key, child: icon);
+    return icon;
+  }
+
   void _onTabTap(int index) {
     if (index != _currentIndex) {
       setState(() => _currentIndex = index);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_maybeShowProfileTabSpotlight());
+      unawaited(_maybeShowPostBadgesExploreTabSpotlight());
+      unawaited(_maybeShowPostBadgesSavedTabSpotlight());
     });
   }
 
@@ -365,6 +400,168 @@ class _MainShellState extends State<_MainShell> {
       },
       onSkip: () {
         _profileTabSpotlightScheduled = false;
+        return true;
+      },
+    ).show(context: context);
+  }
+
+  Future<void> _maybeShowPostBadgesExploreTabSpotlight() async {
+    if (!mounted || _postBadgesExploreTabSpotlightScheduled) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftPostBadgesExploreTab) return;
+    _postBadgesExploreTabSpotlightScheduled = true;
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) {
+      _postBadgesExploreTabSpotlightScheduled = false;
+      return;
+    }
+    final isTablet = MediaQuery.sizeOf(context).width >= 600;
+    final GlobalKey key = isTablet
+        ? _pickRailSpotlightKey(_exploreRailIdleKey, _exploreRailSelectedKey)
+        : _exploreTabKey;
+    if (key.currentContext == null) {
+      _postBadgesExploreTabSpotlightScheduled = false;
+      return;
+    }
+    var tapped = false;
+    TutorialCoachMark(
+      targets: [
+        TargetFocus(
+          identify: 'post_badges_explore_tab_spotlight',
+          keyTarget: key,
+          shape: ShapeLightFocus.RRect,
+          radius: 12,
+          enableTargetTab: true,
+          enableOverlayTab: false,
+          paddingFocus: 6,
+          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
+          contents: [
+            TargetContent(
+              align: ContentAlign.top,
+              padding: const EdgeInsets.only(bottom: 12, left: 18, right: 18),
+              builder: (context, controller) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1C1E),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2C2C2E)),
+                ),
+                child: const Text(
+                  'Keşfet sekmesine dokunarak yeni içeriklere göz at.',
+                  style: TextStyle(
+                    color: Color(0xFFE2E2E2),
+                    fontSize: 14,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+      colorShadow: Colors.black,
+      opacityShadow: 0.78,
+      pulseEnable: false,
+      alignSkip: Alignment.topRight,
+      textSkip: 'Geç',
+      onClickTarget: (_) {
+        tapped = true;
+      },
+      onFinish: () {
+        if (!tapped) {
+          _postBadgesExploreTabSpotlightScheduled = false;
+          return;
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final moved = await OnboardingService.onPostBadgesExploreTabTapped();
+          if (!mounted) return;
+          _postBadgesExploreTabSpotlightScheduled = false;
+          if (moved) _onTabTap(1);
+        });
+      },
+      onSkip: () {
+        _postBadgesExploreTabSpotlightScheduled = false;
+        return true;
+      },
+    ).show(context: context);
+  }
+
+  Future<void> _maybeShowPostBadgesSavedTabSpotlight() async {
+    if (!mounted || _postBadgesSavedTabSpotlightScheduled) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftPostBadgesSavedTab) return;
+    _postBadgesSavedTabSpotlightScheduled = true;
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) {
+      _postBadgesSavedTabSpotlightScheduled = false;
+      return;
+    }
+    final isTablet = MediaQuery.sizeOf(context).width >= 600;
+    final GlobalKey key = isTablet
+        ? _pickRailSpotlightKey(_savedRailIdleKey, _savedRailSelectedKey)
+        : _savedTabKey;
+    if (key.currentContext == null) {
+      _postBadgesSavedTabSpotlightScheduled = false;
+      return;
+    }
+    var tapped = false;
+    TutorialCoachMark(
+      targets: [
+        TargetFocus(
+          identify: 'post_badges_saved_tab_spotlight',
+          keyTarget: key,
+          shape: ShapeLightFocus.RRect,
+          radius: 12,
+          enableTargetTab: true,
+          enableOverlayTab: false,
+          paddingFocus: 6,
+          borderSide: const BorderSide(color: Color(0x400095FF), width: 1.5),
+          contents: [
+            TargetContent(
+              align: ContentAlign.top,
+              padding: const EdgeInsets.only(bottom: 12, left: 18, right: 18),
+              builder: (context, controller) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1C1E),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2C2C2E)),
+                ),
+                child: const Text(
+                  'Kaydettiğin içerikleri Kaydedilenler sekmesinde bulursun; sekmeye dokun.',
+                  style: TextStyle(
+                    color: Color(0xFFE2E2E2),
+                    fontSize: 14,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+      colorShadow: Colors.black,
+      opacityShadow: 0.78,
+      pulseEnable: false,
+      alignSkip: Alignment.topRight,
+      textSkip: 'Geç',
+      onClickTarget: (_) {
+        tapped = true;
+      },
+      onFinish: () {
+        if (!tapped) {
+          _postBadgesSavedTabSpotlightScheduled = false;
+          return;
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final moved = await OnboardingService.onPostBadgesSavedTabTapped();
+          if (!mounted) return;
+          _postBadgesSavedTabSpotlightScheduled = false;
+          if (moved) _onTabTap(2);
+        });
+      },
+      onSkip: () {
+        _postBadgesSavedTabSpotlightScheduled = false;
         return true;
       },
     ).show(context: context);

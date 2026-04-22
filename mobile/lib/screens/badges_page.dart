@@ -178,7 +178,7 @@ class _BadgesPageState extends State<BadgesPage> {
                     border: Border.all(color: const Color(0xFF2C2C2E)),
                   ),
                   child: Text(
-                    'Adım 21/22\n\nİlk aksiyon kartın burada. Karta dokunarak turu tamamla.',
+                    'Adım 21/28\n\nİlk aksiyon kartın burada. Karta dokun; bir sonraki adımda Keşfet sekmesine yönlendirileceksin.',
                     style: GoogleFonts.notoSans(
                       color: const Color(0xFFE2E2E2),
                       fontSize: 14,
@@ -193,6 +193,7 @@ class _BadgesPageState extends State<BadgesPage> {
         colorShadow: Colors.black,
         opacityShadow: 0.78,
         pulseEnable: false,
+        alignSkip: Alignment.topRight,
         textSkip: 'Geç',
         onClickTarget: (_) {
           tapped = true;
@@ -202,7 +203,17 @@ class _BadgesPageState extends State<BadgesPage> {
             _fullTourWeeklyTileCoachShown = false;
             return;
           }
-          unawaited(OnboardingService.setGlobalTourStep(OnboardingService.ftFullTourDone));
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            final moved =
+                await OnboardingService.onPostBadgesFirstActionCoachFinished();
+            if (!mounted) return;
+            _fullTourWeeklyTileCoachShown = false;
+            if (!moved) return;
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+            OnboardingService.requestTab(0);
+          });
         },
         onSkip: () {
           _fullTourWeeklyTileCoachShown = false;

@@ -13,6 +13,9 @@ class OnboardingService {
 
   /// 0..22 ham adım; eski [0..7] compact v2 ile çakışmayı önlemek için ayrı anahtar.
   static const _keyFullTourV4Step = 'onboarding_full_tour_v4_step';
+  /// Rozetler sonrası akış için genişletilmiş tur (0..27), tamam = 28.
+  static const _keyFullTourV5Step = 'onboarding_full_tour_v5_step';
+  static const _keyFullTourV5Migrated = 'onboarding_full_tour_v5_from_v4_migrated';
 
   /// Eski v1: İlk görev → günlük aksiyon → kart → yorum → puan → rozetler zinciri.
   /// [v1ChainDone] tamamlandı (veya eski kullanıcı migrasyonu).
@@ -24,7 +27,7 @@ class OnboardingService {
   static const int v1NeedBadgesPreview = 5;
   static const int v1ChainDone = 6;
 
-  /// 22 adımlı global spotlight turu (0..21), tamamlanmış durum = 22.
+  /// Global spotlight turu: 0..21 klasik, 22..27 rozetler sonrası uzantı, tamam = 28.
   static const int tourStep00LoginIntro = 0;
   static const int tourStep01LoginApple = 1;
   static const int tourStep02LoginGoogle = 2;
@@ -47,7 +50,14 @@ class OnboardingService {
   static const int tourStep19DetailPointsSpotlight = 19;
   static const int tourStep20BadgesAfterComment = 20;
   static const int tourStep21FinalInfo = 21;
-  static const int tourDone = 22;
+  /// Rozetler sonrası: Keşfet sekmesi → ilk kart → detayda kaydet → Kaydedilenler → yenile.
+  static const int tourStep22PostBadgesExploreTab = 22;
+  static const int tourStep23PostBadgesExploreFirstCard = 23;
+  static const int tourStep24PostBadgesDetailSaveCard = 24;
+  static const int tourStep25PostBadgesSavedTab = 25;
+  static const int tourStep26PostBadgesSavedPullRefresh = 26;
+  static const int tourStep27PostBadgesTourEnd = 27;
+  static const int tourDone = 28;
 
   /// Eski isimler — ekran kodlarını kademeli migrate etmek için alias.
   static const int ftNeedLogin = tourStep00LoginIntro;
@@ -63,16 +73,22 @@ class OnboardingService {
   static const int ftBadgesAfterTourComment = tourStep20BadgesAfterComment;
   static const int ftFullTourDone = tourDone;
 
+  static const int ftPostBadgesExploreTab = tourStep22PostBadgesExploreTab;
+  static const int ftPostBadgesExploreFirstCard = tourStep23PostBadgesExploreFirstCard;
+  static const int ftPostBadgesDetailSaveCard = tourStep24PostBadgesDetailSaveCard;
+  static const int ftPostBadgesSavedTab = tourStep25PostBadgesSavedTab;
+  static const int ftPostBadgesSavedPullRefresh = tourStep26PostBadgesSavedPullRefresh;
+
   // --- Geliştirici: eski ilk görev spotlight’ı tekrar denemek ---
   static const bool kDebugRepeatFirstMissionCoach = false;
 
   /// Tur bitince prefs sıfırlanıp yeniden başlatılır (geliştirme).
   /// Test bittiğinde false yap.
-  static bool kDebugRepeatFullTour = true;
+  static bool kDebugRepeatFullTour = false;
   /// Geçici test modu: sadece tek adım çalışsın ve hep aynı adıma dönsün.
   static bool kDebugSingleStepLoop = false;
 
-  /// 22 adım için okunabilir envanter (debug/log amacıyla).
+  /// Tur adımları için okunabilir envanter (debug/log amacıyla).
   static const List<(int step, String id)> fullTourStepInventory = [
     (tourStep00LoginIntro, 'login_intro'),
     (tourStep01LoginApple, 'login_apple'),
@@ -96,6 +112,12 @@ class OnboardingService {
     (tourStep19DetailPointsSpotlight, 'detail_points_spotlight'),
     (tourStep20BadgesAfterComment, 'badges_after_comment'),
     (tourStep21FinalInfo, 'final_info'),
+    (tourStep22PostBadgesExploreTab, 'post_badges_explore_tab'),
+    (tourStep23PostBadgesExploreFirstCard, 'post_badges_explore_first_card'),
+    (tourStep24PostBadgesDetailSaveCard, 'post_badges_detail_save'),
+    (tourStep25PostBadgesSavedTab, 'post_badges_saved_tab'),
+    (tourStep26PostBadgesSavedPullRefresh, 'post_badges_saved_pull_refresh'),
+    (tourStep27PostBadgesTourEnd, 'post_badges_tour_end'),
   ];
 
   static VoidCallback? _debugOnFirstMissionCoachCycleDone;
@@ -152,6 +174,17 @@ class OnboardingService {
     await p.setInt(_keyFullTourV4Step, tourStep04HomeCardIntro);
   }
 
+  /// v4 adımını bir kez v5’e taşır: eski şemada [22] tamamlanmış turdu → [28].
+  static Future<void> _ensureTourV5StorageOnce() async {
+    final p = await SharedPreferences.getInstance();
+    if (p.getBool(_keyFullTourV5Migrated) == true) return;
+    await ensureFullTourMigrated();
+    final v4 = p.getInt(_keyFullTourV4Step) ?? tourStep04HomeCardIntro;
+    final v5 = v4 >= 22 ? tourDone : v4;
+    await p.setInt(_keyFullTourV5Step, v5.clamp(0, tourDone));
+    await p.setBool(_keyFullTourV5Migrated, true);
+  }
+
   /// Eski tek-bayt v2 (0..7) → 22 adım. 8..22 ise zaten geniş adım kabul edilir.
   static int _migrateLegacyCompactOrKeepFull(int raw) {
     if (raw < 0) return tourStep04HomeCardIntro;
@@ -190,25 +223,30 @@ class OnboardingService {
     int step,
   ) async {
     if (!kDebugRepeatFullTour) return;
-    if (step < ftFullTourDone) return;
-    await p.setInt(_keyFullTourV4Step, _debugLoopStartStep());
+    if (step < tourDone) return;
+    final restart = _debugLoopStartStep();
+    await p.setInt(_keyFullTourV5Step, restart);
+    await p.setInt(_keyFullTourV4Step, restart);
   }
 
   static Future<int> getGlobalTourStep() async {
     await ensureFullTourMigrated();
+    await _ensureTourV5StorageOnce();
     final p = await SharedPreferences.getInstance();
-    final step = p.getInt(_keyFullTourV4Step) ?? tourStep04HomeCardIntro;
+    final step = p.getInt(_keyFullTourV5Step) ?? tourStep04HomeCardIntro;
     if (kDebugSingleStepLoop) {
       final only = _debugLoopStartStep();
       if (step != only) {
+        await p.setInt(_keyFullTourV5Step, only);
         await p.setInt(_keyFullTourV4Step, only);
       }
       return only;
     }
-    var out = step.clamp(0, ftFullTourDone);
+    var out = step.clamp(0, tourDone);
     // Uygulama yeniden açıldığında da debug döngüsü tetiklensin.
-    if (kDebugRepeatFullTour && out >= ftFullTourDone) {
+    if (kDebugRepeatFullTour && out >= tourDone) {
       final restartStep = _debugLoopStartStep();
+      await p.setInt(_keyFullTourV5Step, restartStep);
       await p.setInt(_keyFullTourV4Step, restartStep);
       return restartStep;
     }
@@ -217,14 +255,18 @@ class OnboardingService {
 
   static Future<void> setGlobalTourStep(int step) async {
     await ensureFullTourMigrated();
+    await _ensureTourV5StorageOnce();
     final p = await SharedPreferences.getInstance();
     if (kDebugSingleStepLoop) {
-      await p.setInt(_keyFullTourV4Step, _debugLoopStartStep());
+      final only = _debugLoopStartStep();
+      await p.setInt(_keyFullTourV5Step, only);
+      await p.setInt(_keyFullTourV4Step, only);
       return;
     }
-    final clamped = step.clamp(0, ftFullTourDone);
+    final clamped = step.clamp(0, tourDone);
+    await p.setInt(_keyFullTourV5Step, clamped);
     await p.setInt(_keyFullTourV4Step, clamped);
-    if (clamped >= ftFullTourDone) {
+    if (clamped >= tourDone) {
       await _markLegacyV1DoneForMigration(p);
     }
     await _applyDebugLoopIfNeeded(p, clamped);
@@ -313,6 +355,47 @@ class OnboardingService {
     );
   }
 
+  static Future<bool> onPostBadgesFirstActionCoachFinished() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftProfileSpotlight,
+      nextStep: ftPostBadgesExploreTab,
+    );
+  }
+
+  static Future<bool> onPostBadgesExploreTabTapped() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftPostBadgesExploreTab,
+      nextStep: ftPostBadgesExploreFirstCard,
+    );
+  }
+
+  static Future<bool> onPostBadgesExploreFirstCardFinished() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftPostBadgesExploreFirstCard,
+      nextStep: ftPostBadgesDetailSaveCard,
+    );
+  }
+
+  static Future<bool> onPostBadgesDetailSaveFinished() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftPostBadgesDetailSaveCard,
+      nextStep: ftPostBadgesSavedTab,
+    );
+  }
+
+  static Future<bool> onPostBadgesSavedTabTapped() {
+    return moveToStepIfCurrent(
+      expectedCurrent: ftPostBadgesSavedTab,
+      nextStep: ftPostBadgesSavedPullRefresh,
+    );
+  }
+
+  static Future<void> onPostBadgesSavedPullRefreshCompleted() async {
+    final current = await getGlobalTourStep();
+    if (current != ftPostBadgesSavedPullRefresh) return;
+    await setGlobalTourStep(tourDone);
+  }
+
   static Future<bool> onExploreSavedFirstItem() {
     return moveToStepIfCurrent(
       expectedCurrent: ftExploreSave,
@@ -335,13 +418,16 @@ class OnboardingService {
 
   static Future<void> resetFullTourForDebug() async {
     final p = await SharedPreferences.getInstance();
-    await p.setInt(_keyFullTourV4Step, _debugLoopStartStep());
+    final s = _debugLoopStartStep();
+    await p.setInt(_keyFullTourV5Step, s);
+    await p.setInt(_keyFullTourV4Step, s);
+    await p.setBool(_keyFullTourV5Migrated, true);
   }
 
   /// Legacy v1 coach’ları (ilk görev / ana kart / eski detay zinciri) full tur bitene kadar kapalı.
   static Future<bool> isFullTourBlockingLegacyV1() async {
     final ph = await getFullTourPhase();
-    return ph < ftFullTourDone;
+    return ph < tourDone;
   }
 
   static Future<int> getOnboardingV1Phase() async {
