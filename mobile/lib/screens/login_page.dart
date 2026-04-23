@@ -9,6 +9,7 @@ import '../services/auth_service.dart';
 import '../services/gamification_service.dart';
 import '../services/notification_badge_controller.dart';
 import '../services/notification_store_service.dart';
+import '../services/onboarding_service.dart';
 import '../widgets/login_full_tour_coach.dart';
 
 /// Giriş sayfası — Apple ve Google ile giriş ([Figma](https://www.figma.com/design/v3UoAoZoaW92TprwR8CSk1/Periodicly-Notification?node-id=60-1024)).
@@ -35,6 +36,7 @@ class _LoginPageState extends State<LoginPage> {
 
   final GlobalKey _googleSignInKey = GlobalKey();
   final GlobalKey _appleSignInKey = GlobalKey();
+  final GlobalKey _loginTitleKey = GlobalKey();
   bool _fullTourCoachScheduled = false;
 
   static const Color _bg = Color(0xFF131313);
@@ -67,9 +69,20 @@ class _LoginPageState extends State<LoginPage> {
         await GamificationService.syncFromBackend();
         await NotificationStoreService.syncFromBackend();
         await NotificationBadgeController.instance.refresh();
+        final ftp = await OnboardingService.getGlobalTourStep();
+        if (ftp <= OnboardingService.tourStep03LoginSuccess) {
+          await OnboardingService.setGlobalTourStep(
+            OnboardingService.tourStep04HomeCardIntro,
+          );
+        }
         if (!mounted) return;
-        widget.onSuccess?.call();
-        if (mounted) Navigator.of(context).pop(true);
+        if (widget.onSuccess != null) {
+          // onSuccess zaten üstteki [Login] route'u pop'lar; ikinci pop üstteki
+          // String?/bool tipinde route'u hatalı kapatmaya çalışır.
+          widget.onSuccess!();
+        } else {
+          Navigator.of(context).pop(true);
+        }
       }
     } on Exception catch (e) {
       if (!mounted) return;
@@ -101,8 +114,9 @@ class _LoginPageState extends State<LoginPage> {
     await Future<void>.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
     final appleKey = (Platform.isIOS || Platform.isMacOS) ? _appleSignInKey : null;
-    LoginFullTourCoach.show(
+    await LoginFullTourCoach.show(
       context: context,
+      introTitleKey: _loginTitleKey,
       googleKey: _googleSignInKey,
       appleKey: appleKey,
     );
@@ -115,7 +129,24 @@ class _LoginPageState extends State<LoginPage> {
     if (err.contains('network')) {
       return 'İnternet bağlantısı gerekli.';
     }
+    if (err.contains('Google Android yapılandırması (SHA-1)')) {
+      final stripped = err.replaceFirst(RegExp(r'^Exception:\s*'), '');
+      return stripped.length < 420 ? stripped : '${stripped.substring(0, 417)}…';
+    }
+    if (err.contains('ApiException: 10') ||
+        err.contains('DEVELOPER_ERROR') ||
+        RegExp(r'ApiException:\s*10\b').hasMatch(err)) {
+      return 'Google girişi bu cihazda yapılandırma hatası veriyor (genelde emülatör). '
+          'Google Cloud Console → Kimlik bilgileri → Android OAuth istemcisine '
+          '`com.siyazilim.periodicallynotification` ve debug keystore SHA-1 ekleyin; '
+          'Google Play’li emülatör görüntüsü kullanın.';
+    }
     if (err.contains('sign_in_failed') || err.contains('invalid_credential')) {
+      if (Platform.isAndroid) {
+        return 'Google ile giriş tamamlanamadı. Emülatörde “Google Play” sistem görüntüsü '
+            'kullanın, Ayarlar’dan bir Google hesabı ekleyin. Geliştirici olarak '
+            'Google Cloud’ta debug SHA-1’in tanımlı olduğundan emin olun.';
+      }
       return 'Giriş başarısız. Lütfen tekrar deneyin.';
     }
     if (err.contains('Geçersiz Google token')) {
@@ -174,14 +205,17 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    Text(
-                      'Giriş yap',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.newsreader(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w700,
-                        height: 1.15,
-                        color: Colors.white,
+                    KeyedSubtree(
+                      key: _loginTitleKey,
+                      child: Text(
+                        'Giriş yap',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.newsreader(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w700,
+                          height: 1.15,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),

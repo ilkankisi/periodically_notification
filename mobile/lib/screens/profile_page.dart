@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import '../widgets/app_spotlight_layer.dart';
 
 import '../services/auth_service.dart';
 import '../services/gamification_service.dart';
 import '../services/notification_badge_controller.dart';
+import '../services/onboarding_service.dart';
 import '../services/profile_service.dart';
 import '../widgets/app_top_bar.dart';
 import '../widgets/bottom_nav_bar.dart';
@@ -22,10 +25,14 @@ class ProfilePage extends StatefulWidget {
     super.key,
     this.showBottomBar = true,
     this.onTabTap,
+    this.isMainShellActiveTab = false,
   });
 
   final bool showBottomBar;
   final ValueChanged<int>? onTabTap;
+
+  /// [main.dart] IndexedStack’te bu sekme seçildiğinde true; tur spotlight’ı yeniden denemek için.
+  final bool isMainShellActiveTab;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -38,6 +45,9 @@ class _ProfilePageState extends State<ProfilePage> {
   String? _authPhotoUrl;
   bool _isLoggedIn = false;
   GamificationSnapshot? _gamification;
+  final GlobalKey _profileHeroTourKey = GlobalKey();
+  final GlobalKey _profileBadgesSeeAllKey = GlobalKey();
+  bool _profileTourScheduled = false;
 
   @override
   void initState() {
@@ -46,6 +56,17 @@ class _ProfilePageState extends State<ProfilePage> {
     _updateAuthState();
     AuthService.authStateChanges.listen((_) => _updateAuthState());
     GamificationService.onStateChanged.addListener(_onGamificationChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_maybeShowProfileTourSpotlight());
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfilePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isMainShellActiveTab && widget.isMainShellActiveTab) {
+      unawaited(_maybeShowProfileTourSpotlight());
+    }
   }
 
   @override
@@ -108,6 +129,48 @@ class _ProfilePageState extends State<ProfilePage> {
       }
       _profileImagePath = imagePath;
       _gamification = AuthService.isLoggedIn ? gam : null;
+    });
+    unawaited(_maybeShowProfileTourSpotlight());
+  }
+
+  Future<void> _maybeShowProfileTourSpotlight() async {
+    if (!mounted || _profileTourScheduled || !_isLoggedIn) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftBadgesAfterTourComment) return;
+    _profileTourScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 280));
+      if (!mounted || _profileBadgesSeeAllKey.currentContext == null) {
+        _profileTourScheduled = false;
+        return;
+      }
+      AppSpotlightLayer.show(
+        context: context,
+        targetKey: _profileBadgesSeeAllKey,
+        holePadding: const EdgeInsets.all(8),
+        holeBorderRadius: 10,
+        captionAlignment: Alignment.bottomCenter,
+        captionMargin: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+        caption: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF2C2C2E)),
+          ),
+          child: Text(
+            'Adım 20/22\n\nRozetlerini görmek için `Tümünü Gör` butonuna bas.',
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFFE2E2E2),
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+        ),
+        onClosed: (_) {
+          _profileTourScheduled = false;
+        },
+      );
     });
   }
 
@@ -279,9 +342,11 @@ class _ProfilePageState extends State<ProfilePage> {
     final showLocalPhoto = !showAuthPhoto && _profileImagePath != null && File(_profileImagePath!).existsSync();
     final name = _displayName?.trim().isNotEmpty == true ? _displayName! : 'Kullanıcı';
 
-    return SizedBox(
-      height: 204,
-      child: Stack(
+    return KeyedSubtree(
+      key: _profileHeroTourKey,
+      child: SizedBox(
+        height: 204,
+        child: Stack(
         alignment: Alignment.topCenter,
         children: [
           Positioned(
@@ -395,6 +460,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -487,7 +553,13 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   TextButton(
+                    key: _profileBadgesSeeAllKey,
                     onPressed: () async {
+                      if (AppSpotlightLayer.isShowing) {
+                        AppSpotlightLayer.completeTargetTap();
+                      }
+                      await OnboardingService.onProfileBadgesSeeAllTapped();
+                      if (!mounted) return;
                       await Navigator.push<void>(
                         context,
                         MaterialPageRoute<void>(builder: (_) => const BadgesPage()),

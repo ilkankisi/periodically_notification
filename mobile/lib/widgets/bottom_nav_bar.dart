@@ -7,12 +7,14 @@ class BottomNavBar extends StatelessWidget {
   final int activeIndex;
   final ValueChanged<int>? onTabTap;
   final VoidCallback? onHomeTap;
+  final List<GlobalKey?>? itemKeys;
 
   const BottomNavBar({
     super.key,
     this.activeIndex = 0,
     this.onTabTap,
     this.onHomeTap,
+    this.itemKeys,
   });
 
   static const List<IconData> _iconsIdle = [
@@ -53,6 +55,9 @@ class BottomNavBar extends StatelessWidget {
           children: [
             for (var i = 0; i < _labels.length; i++)
               _NavItem(
+                key: itemKeys != null && i < itemKeys!.length
+                    ? itemKeys![i]
+                    : null,
                 icon: activeIndex == i ? _iconsActive[i] : _iconsIdle[i],
                 label: _labels[i],
                 active: activeIndex == i,
@@ -78,6 +83,7 @@ class _NavItem extends StatelessWidget {
   final VoidCallback onTap;
 
   const _NavItem({
+    super.key,
     required this.icon,
     required this.label,
     required this.active,

@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
+import '../widgets/app_spotlight_layer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/comment.dart';
@@ -13,6 +14,7 @@ import '../services/auth_service.dart';
 import '../services/backend_service.dart';
 import '../models/gamification_badge.dart';
 import '../services/comment_service.dart';
+import '../services/daily_action_onboarding_helper.dart';
 import '../services/onboarding_service.dart';
 import '../services/moderation_service.dart';
 import '../services/saved_items_service.dart';
@@ -54,20 +56,38 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   Comment? _replyTo;
   String? _reactingCommentId;
   bool _commentsNewestFirst = true;
+  final ScrollController _detailScrollController = ScrollController();
 
   final GlobalKey _commentPointsSpotlightKey = GlobalKey();
   final GlobalKey _onboardingComposerAreaKey = GlobalKey();
+  final GlobalKey _detailReadBodyKey = GlobalKey();
+  final GlobalKey _detailActionCardKey = GlobalKey();
+  final GlobalKey _detailActionButtonKey = GlobalKey();
+  final GlobalKey _detailBackButtonKey = GlobalKey();
   bool _commentPointsSpotlightVisible = false;
   int _spotlightEarnedPoints = 0;
   List<String> _spotlightNewBadgeIds = const [];
+  bool _detailReadCoachShown = false;
+  bool _detailActionCoachShown = false;
+  bool _detailActionButtonCoachShown = false;
+  bool _detailBackPopupShown = false;
+  bool _handlingTourBackNavigation = false;
+  final GlobalKey _postTourSaveCardKey = GlobalKey();
+  bool _postBadgesSaveLibraryCoachScheduled = false;
 
   @override
   void initState() {
     super.initState();
-    SavedItemsService.isSaved(widget.item.id).then((v) => setState(() => _saved = v));
+    SavedItemsService.isSaved(
+      widget.item.id,
+    ).then((v) => setState(() => _saved = v));
     _loadMyAction();
     _commentsSub = CommentService.streamComments(widget.item.id).listen((list) {
       if (mounted) setState(() => _comments = list);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_maybeStartFullTourDetailFlow());
+      unawaited(_maybeShowPostBadgesSaveLibraryCoach());
     });
     if (widget.onboardingV1ComposerCoach && AuthService.isLoggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -77,7 +97,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           context: context,
           composerAreaKey: _onboardingComposerAreaKey,
           onFlowFinished: () async {
-            await OnboardingService.setOnboardingV1Phase(OnboardingService.v1NeedFirstComment);
+            await OnboardingService.setOnboardingV1Phase(
+              OnboardingService.v1NeedFirstComment,
+            );
           },
         );
       });
@@ -92,6 +114,23 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         );
       });
     }
+  }
+
+  Future<void> _maybeStartFullTourDetailFlow() async {
+    if (!mounted || _detailReadCoachShown) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftDetailReadIntro) return;
+    _detailReadCoachShown = true;
+    await _showDetailInfoPopup(
+      title: 'İçeriği oku',
+      stepLabel: 'Adım 16/22',
+      body:
+          'Kırmızıyla vurgulanan metin gövdesini okuduktan sonra o alana dokun. Sonraki adımda aksiyonunu yazacaksın.',
+    );
+    if (!mounted) return;
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) return;
+    _showDetailReadBodyCoach();
   }
 
   Future<void> _loadMyAction() async {
@@ -109,12 +148,71 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   void dispose() {
     _commentsSub?.cancel();
     _commentController.dispose();
+    _detailScrollController.dispose();
     super.dispose();
   }
 
   Future<void> _toggleSaved() async {
+    if (AppSpotlightLayer.isShowing) {
+      AppSpotlightLayer.completeTargetTap();
+    }
+    final beforeStep = await OnboardingService.getGlobalTourStep();
+    final wasUnsaved = !_saved;
     final nowSaved = await SavedItemsService.toggleSaved(widget.item.id);
+    if (!mounted) return;
     setState(() => _saved = nowSaved);
+    if (beforeStep == OnboardingService.ftPostBadgesDetailSaveCard &&
+        nowSaved &&
+        wasUnsaved) {
+      final moved = await OnboardingService.onPostBadgesDetailSaveFinished();
+      if (!mounted) return;
+      if (moved) {
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+        OnboardingService.requestTab(2);
+      }
+    }
+  }
+
+  Future<void> _maybeShowPostBadgesSaveLibraryCoach() async {
+    if (!mounted || _postBadgesSaveLibraryCoachScheduled) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftPostBadgesDetailSaveCard) return;
+    _postBadgesSaveLibraryCoachScheduled = true;
+    await Future<void>.delayed(const Duration(milliseconds: 380));
+    if (!mounted || _postTourSaveCardKey.currentContext == null) {
+      _postBadgesSaveLibraryCoachScheduled = false;
+      return;
+    }
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: _postTourSaveCardKey,
+      holePadding: const EdgeInsets.all(8),
+      holeBorderRadius: 14,
+      caption: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF2C2C2E)),
+          ),
+          child: Text(
+            'Bu içeriği Sakla kartına dokunarak kütüphanene ekle.',
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFFE2E2E2),
+              fontSize: 14,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ),
+      onClosed: (_) {
+        _postBadgesSaveLibraryCoachScheduled = false;
+      },
+    );
   }
 
   List<Comment> _orderedComments() {
@@ -169,18 +267,22 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   }
 
   Future<void> _popFullTourBadgesIfNeeded() async {
-    final ftp = await OnboardingService.getFullTourPhase();
+    final ftp = await OnboardingService.getGlobalTourStep();
     if (ftp != OnboardingService.ftSavedComment) return;
     if (!mounted) return;
-    await OnboardingService.setFullTourPhase(OnboardingService.ftBadgesAfterTourComment);
+    await OnboardingService.setGlobalTourStep(
+      OnboardingService.ftBadgesAfterTourComment,
+    );
     if (!mounted) return;
     Navigator.of(context).pop<String>('full_tour_badges');
   }
 
   Future<void> _finishV1CommentPointsCoachAndReturnHome() async {
-    final ftp = await OnboardingService.getFullTourPhase();
+    final ftp = await OnboardingService.getGlobalTourStep();
     if (ftp == OnboardingService.ftSavedComment) {
-      await OnboardingService.setFullTourPhase(OnboardingService.ftBadgesAfterTourComment);
+      await OnboardingService.setGlobalTourStep(
+        OnboardingService.ftBadgesAfterTourComment,
+      );
       if (!mounted) return;
       Navigator.of(context).pop<String>('full_tour_badges');
       return;
@@ -199,7 +301,8 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       return;
     }
     final me = AuthService.backendUserId;
-    final topLevelOthers = me != null &&
+    final topLevelOthers =
+        me != null &&
         _comments.any((c) => c.userId != me && c.parentId == null);
     final hadOthers = _replyTo == null && topLevelOthers;
     setState(() => _sendingComment = true);
@@ -217,7 +320,8 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         final pts = posted.pointsAwarded;
         final earnedGamification = pts > 0 || newBadges.isNotEmpty;
         if (earnedGamification) {
-          final showSpotlight = await OnboardingService.shouldShowCommentPointsSpotlight();
+          final showSpotlight =
+              await OnboardingService.shouldShowCommentPointsSpotlight();
           if (!mounted) return;
           if (showSpotlight) {
             setState(() {
@@ -228,7 +332,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
             final navigatorContext = context;
             WidgetsBinding.instance.addPostFrameCallback((_) async {
               await Future<void>.delayed(const Duration(milliseconds: 420));
-              if (!navigatorContext.mounted || !_commentPointsSpotlightVisible) return;
+              if (!navigatorContext.mounted ||
+                  !_commentPointsSpotlightVisible) {
+                return;
+              }
               CommentPointsCoach.show(
                 context: navigatorContext,
                 anchorKey: _commentPointsSpotlightKey,
@@ -287,7 +394,8 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       final data = await CommentService.reactToComment(c.id, value);
       if (!mounted || data == null) return;
       final likes = (data['likeCount'] as num?)?.toInt() ?? c.likeCount;
-      final dislikes = (data['dislikeCount'] as num?)?.toInt() ?? c.dislikeCount;
+      final dislikes =
+          (data['dislikeCount'] as num?)?.toInt() ?? c.dislikeCount;
       int? myR;
       final mr = data['myReaction'];
       if (mr != null) myR = (mr as num).toInt();
@@ -332,7 +440,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('İptal', style: TextStyle(color: Color(0xFF0095FF))),
+            child: const Text(
+              'İptal',
+              style: TextStyle(color: Color(0xFF0095FF)),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -351,9 +462,8 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => LoginPage(
-          onSuccess: () => Navigator.pop(context, true),
-        ),
+        builder: (_) =>
+            LoginPage(onSuccess: () => Navigator.pop(context, true)),
       ),
     );
     if (result == true && mounted) {
@@ -385,19 +495,31 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
               ),
             ),
             ListTile(
-              title: Text('Spam', style: GoogleFonts.notoSans(color: Colors.white)),
+              title: Text(
+                'Spam',
+                style: GoogleFonts.notoSans(color: Colors.white),
+              ),
               onTap: () => Navigator.pop(ctx, 'spam'),
             ),
             ListTile(
-              title: Text('Taciz veya hakaret', style: GoogleFonts.notoSans(color: Colors.white)),
+              title: Text(
+                'Taciz veya hakaret',
+                style: GoogleFonts.notoSans(color: Colors.white),
+              ),
               onTap: () => Navigator.pop(ctx, 'abuse'),
             ),
             ListTile(
-              title: Text('Uygunsuz içerik', style: GoogleFonts.notoSans(color: Colors.white)),
+              title: Text(
+                'Uygunsuz içerik',
+                style: GoogleFonts.notoSans(color: Colors.white),
+              ),
               onTap: () => Navigator.pop(ctx, 'inappropriate'),
             ),
             ListTile(
-              title: Text('Diğer', style: GoogleFonts.notoSans(color: Colors.white)),
+              title: Text(
+                'Diğer',
+                style: GoogleFonts.notoSans(color: Colors.white),
+              ),
               onTap: () => Navigator.pop(ctx, 'other'),
             ),
             const SizedBox(height: 8),
@@ -415,7 +537,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           final controller = TextEditingController();
           return AlertDialog(
             backgroundColor: const Color(0xFF1F1F1F),
-            title: Text('Kısa açıklama', style: GoogleFonts.notoSans(color: Colors.white)),
+            title: Text(
+              'Kısa açıklama',
+              style: GoogleFonts.notoSans(color: Colors.white),
+            ),
             content: TextField(
               controller: controller,
               style: const TextStyle(color: Colors.white),
@@ -431,7 +556,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   controller.dispose();
                   Navigator.pop(ctx);
                 },
-                child: const Text('İptal', style: TextStyle(color: Color(0xFF0095FF))),
+                child: const Text(
+                  'İptal',
+                  style: TextStyle(color: Color(0xFF0095FF)),
+                ),
               ),
               FilledButton(
                 onPressed: () {
@@ -439,7 +567,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   controller.dispose();
                   Navigator.pop(ctx, t);
                 },
-                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0095FF)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF0095FF),
+                ),
                 child: const Text('Gönder'),
               ),
             ],
@@ -458,7 +588,11 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok ? 'Raporunuz alındı. Teşekkürler.' : 'Rapor gönderilemedi. Giriş yapın veya tekrar deneyin.'),
+        content: Text(
+          ok
+              ? 'Raporunuz alındı. Teşekkürler.'
+              : 'Rapor gönderilemedi. Giriş yapın veya tekrar deneyin.',
+        ),
         backgroundColor: const Color(0xFF374151),
       ),
     );
@@ -469,7 +603,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('Kullanıcıyı engelle', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Kullanıcıyı engelle',
+          style: TextStyle(color: Colors.white),
+        ),
         content: Text(
           '${c.userDisplayName} kullanıcısının yorumlarını görmeyeceksiniz.',
           style: const TextStyle(color: Color(0xFFB0B0B0), height: 1.35),
@@ -477,7 +614,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('İptal', style: TextStyle(color: Color(0xFF0095FF))),
+            child: const Text(
+              'İptal',
+              style: TextStyle(color: Color(0xFF0095FF)),
+            ),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -532,21 +672,38 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFFE8E8E8), size: 20),
-                    style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+                    key: _detailBackButtonKey,
+                    onPressed: _handleBackPressed,
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Color(0xFFE8E8E8),
+                      size: 20,
+                    ),
+                    style: IconButton.styleFrom(
+                      padding: const EdgeInsets.all(12),
+                    ),
                   ),
                   if (widget.item.id.startsWith('user_'))
                     IconButton(
                       onPressed: _deleteUserContent,
-                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFBFC7D5), size: 22),
-                      style: IconButton.styleFrom(padding: const EdgeInsets.all(8)),
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: Color(0xFFBFC7D5),
+                        size: 22,
+                      ),
+                      style: IconButton.styleFrom(
+                        padding: const EdgeInsets.all(8),
+                      ),
                     ),
                 ],
               ),
               IconButton(
                 onPressed: () => _shareContent(context),
-                icon: const Icon(Icons.ios_share_rounded, color: Color(0xFFE8E8E8), size: 22),
+                icon: const Icon(
+                  Icons.ios_share_rounded,
+                  color: Color(0xFFE8E8E8),
+                  size: 22,
+                ),
                 style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
               ),
             ],
@@ -609,6 +766,252 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     );
   }
 
+  Future<void> _showDetailInfoPopup({
+    required String title,
+    required String stepLabel,
+    required String body,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        const accent = Color(0xFF0095FF);
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1C1C1E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.newsreader(
+                    color: const Color(0xFFE2E2E2),
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0x14FFFFFF),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  stepLabel,
+                  style: GoogleFonts.notoSans(
+                    color: const Color(0xFFD1D5DB),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            body,
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFF9CA3AF),
+              fontSize: 14,
+              height: 1.45,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              style: TextButton.styleFrom(foregroundColor: accent),
+              child: Text(
+                'Tamam',
+                style: GoogleFonts.notoSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDetailReadBodyCoach() {
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: _detailReadBodyKey,
+      holePadding: const EdgeInsets.all(6),
+      holeBorderRadius: 10,
+      caption: const SizedBox.shrink(),
+      onClosed: (_) {},
+    );
+  }
+
+  Future<void> _onDetailReadBodyTapped() async {
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftDetailReadIntro) return;
+    final moved = await OnboardingService.onDetailReadBodyTapped();
+    if (!moved) return;
+    if (AppSpotlightLayer.isShowing) {
+      AppSpotlightLayer.completeTargetTap();
+    }
+    if (!mounted || _detailActionCoachShown) return;
+    _detailActionCoachShown = true;
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) return;
+    final actionCtx = _detailActionCardKey.currentContext;
+    if (actionCtx == null || !actionCtx.mounted) return;
+    await Scrollable.ensureVisible(
+      actionCtx,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      alignment: 0.2,
+    );
+    if (!mounted) return;
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: _detailActionCardKey,
+      holePadding: const EdgeInsets.all(8),
+      holeBorderRadius: 16,
+      caption: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
+        ),
+        child: Text(
+          'Adım 17/22\n\nKarta bir kez dokunup spotlightı kapat; sonra aksiyonunu yazıp `Aksiyon Ekle` ile kaydet.',
+          style: GoogleFonts.notoSans(
+            color: const Color(0xFFE2E2E2),
+            fontSize: 14,
+            height: 1.4,
+          ),
+        ),
+      ),
+      onClosed: (_) {},
+    );
+  }
+
+  Future<void> _onDetailActionSavedForTour() async {
+    final moved = await OnboardingService.onDetailActionSaved();
+    if (!moved || !mounted || _detailBackPopupShown) return;
+    _detailBackPopupShown = true;
+    await _showDetailInfoPopup(
+      title: 'Anasayfaya dön',
+      stepLabel: 'Adım 18/22',
+      body:
+          'Aksiyon kaydedildi. Şimdi sol üstteki geri oka basıp Anasayfa ekranına dön.',
+    );
+    if (!mounted) return;
+    unawaited(_showBackButtonSpotlight());
+  }
+
+  Future<void> _showBackButtonSpotlight() async {
+    if (_detailScrollController.hasClients) {
+      await _detailScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (!mounted) return;
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted || _detailBackButtonKey.currentContext == null) return;
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: _detailBackButtonKey,
+      holePadding: const EdgeInsets.all(8),
+      holeBorderRadius: 999,
+      captionAlignment: Alignment.bottomCenter,
+      captionMargin: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+      caption: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
+        ),
+        child: Text(
+          'Bu geri oka basıp anasayfaya dön.',
+          style: GoogleFonts.notoSans(
+            color: const Color(0xFFE2E2E2),
+            fontSize: 14,
+            height: 1.4,
+          ),
+        ),
+      ),
+      onClosed: (reason) {
+        if (reason == AppSpotlightReason.skipped) return;
+        if (reason == AppSpotlightReason.targetTapped) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            unawaited(_handleBackPressed());
+          });
+        }
+      },
+    );
+  }
+
+  Future<void> _maybeShowActionButtonSpotlight(String value) async {
+    if (_detailActionButtonCoachShown) return;
+    if (value.trim().isEmpty) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftDetailReadIntro &&
+        ftp != OnboardingService.ftDetailBackToHome) {
+      return;
+    }
+    if (!mounted) return;
+    _detailActionButtonCoachShown = true;
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: _detailActionButtonKey,
+      holePadding: const EdgeInsets.all(6),
+      holeBorderRadius: 12,
+      caption: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
+        ),
+        child: Text(
+          'Harika. Şimdi `Aksiyon Ekle` butonuna bas.',
+          style: GoogleFonts.notoSans(
+            color: const Color(0xFFE2E2E2),
+            fontSize: 14,
+            height: 1.4,
+          ),
+        ),
+      ),
+      onClosed: (_) {},
+    );
+  }
+
+  Future<void> _handleBackPressed() async {
+    if (AppSpotlightLayer.isShowing) {
+      AppSpotlightLayer.completeTargetTap();
+      return;
+    }
+    if (_handlingTourBackNavigation) return;
+    _handlingTourBackNavigation = true;
+    try {
+      final tourBackToProfile =
+          await OnboardingService.onDetailBackConfirmedToProfile();
+      if (!mounted) return;
+      final nav = Navigator.of(context);
+      if (nav.canPop()) {
+        nav.pop();
+      }
+      // Full turda bu noktada kullanıcıyı önce Anasayfa'ya döndürüp
+      // alt barda Profil sekmesini spotlight ile tıklatıyoruz.
+      if (tourBackToProfile) {
+        OnboardingService.requestTab(0);
+      }
+    } finally {
+      _handlingTourBackNavigation = false;
+    }
+  }
+
   Widget _buildSaveLibraryCard() {
     return Material(
       color: Colors.transparent,
@@ -635,7 +1038,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    _saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                    _saved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
                     color: const Color(0xFFA1C9FF),
                     size: 22,
                   ),
@@ -665,9 +1070,32 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, color: Color(0xFF6B7280), size: 26),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFF6B7280),
+                  size: 26,
+                ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReadableBodyText(String text) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: _onDetailReadBodyTapped,
+      child: KeyedSubtree(
+        key: _detailReadBodyKey,
+        child: Text(
+          text,
+          style: GoogleFonts.notoSans(
+            fontSize: 17,
+            fontWeight: FontWeight.w400,
+            height: 1.55,
+            color: const Color(0xFFE5E7EB),
           ),
         ),
       ),
@@ -689,20 +1117,25 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         children: [
           Expanded(
             child: SingleChildScrollView(
+              controller: _detailScrollController,
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(24),
+                    ),
                     child: SizedBox(
                       height: heroTotalH,
                       width: double.infinity,
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          Positioned.fill(child: _buildHeroImageLayer(height: heroTotalH)),
+                          Positioned.fill(
+                            child: _buildHeroImageLayer(height: heroTotalH),
+                          ),
                           Positioned(
                             top: 0,
                             left: 0,
@@ -728,7 +1161,12 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                             right: 0,
                             bottom: 0,
                             child: Container(
-                              padding: const EdgeInsets.fromLTRB(24, 40, 24, 22),
+                              padding: const EdgeInsets.fromLTRB(
+                                24,
+                                40,
+                                24,
+                                22,
+                              ),
                               decoration: const BoxDecoration(
                                 gradient: LinearGradient(
                                   begin: Alignment.topCenter,
@@ -746,13 +1184,17 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFF0095FF),
                                       borderRadius: BorderRadius.circular(999),
                                     ),
                                     child: Text(
-                                      (widget.item.category ?? 'Günün İçeriği').toUpperCase(),
+                                      (widget.item.category ?? 'Günün İçeriği')
+                                          .toUpperCase(),
                                       style: GoogleFonts.notoSans(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
@@ -790,7 +1232,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                                       fontSize: 13,
                                       fontWeight: FontWeight.w500,
                                       height: 1.3,
-                                      color: Colors.white.withValues(alpha: 0.88),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.88,
+                                      ),
                                     ),
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
@@ -825,34 +1269,36 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                             ),
                           ),
                           _buildInDepthDivider(),
-                          Text(
-                            bodyParts.$2,
-                            style: GoogleFonts.notoSans(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w400,
-                              height: 1.55,
-                              color: const Color(0xFFE5E7EB),
-                            ),
-                          ),
+                          _buildReadableBodyText(bodyParts.$2),
                         ] else ...[
                           _buildInDepthDivider(),
-                          Text(
-                            bodyParts.$2,
-                            style: GoogleFonts.notoSans(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w400,
-                              height: 1.55,
-                              color: const Color(0xFFE5E7EB),
-                            ),
-                          ),
+                          _buildReadableBodyText(bodyParts.$2),
                         ],
                         const SizedBox(height: 28),
-                        _buildSaveLibraryCard(),
+                        KeyedSubtree(
+                          key: _postTourSaveCardKey,
+                          child: _buildSaveLibraryCard(),
+                        ),
                         const SizedBox(height: 20),
-                        AddActionCard(
-                          quoteId: widget.item.id,
-                          quoteTitle: widget.item.title,
-                          onActionSaved: _loadMyAction,
+                        KeyedSubtree(
+                          key: _detailActionCardKey,
+                          child: AddActionCard(
+                            quoteId: widget.item.id,
+                            quoteTitle: widget.item.title,
+                            actionButtonKey: _detailActionButtonKey,
+                            onNoteChanged: (value) {
+                              unawaited(_maybeShowActionButtonSpotlight(value));
+                            },
+                            onActionSaved: () async {
+                              await _loadMyAction();
+                              if (!context.mounted) return;
+                              await _onDetailActionSavedForTour();
+                              if (!context.mounted) return;
+                              await DailyActionOnboardingHelper.afterDailyActionSaved(
+                                context,
+                              );
+                            },
+                          ),
                         ),
                         if (_myAction != null) ...[
                           const SizedBox(height: 24),
@@ -883,7 +1329,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       decoration: BoxDecoration(
         color: const Color(0xFF1F1F1F),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF0095FF).withValues(alpha: 0.35)),
+        border: Border.all(
+          color: const Color(0xFF0095FF).withValues(alpha: 0.35),
+        ),
         boxShadow: const [
           BoxShadow(
             color: Color(0x140095FF),
@@ -898,7 +1346,11 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         children: [
           Row(
             children: [
-              const Icon(Icons.check_circle_outline_rounded, color: Color(0xFFA1C9FF), size: 22),
+              const Icon(
+                Icons.check_circle_outline_rounded,
+                color: Color(0xFFA1C9FF),
+                size: 22,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Bu sözle yaptığınız',
@@ -956,7 +1408,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
               padding: EdgeInsets.zero,
               offset: const Offset(0, 36),
               color: const Color(0xFF1F1F1F),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               onSelected: (v) {
                 setState(() {
                   _commentsNewestFirst = v == 'newest';
@@ -968,7 +1422,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   child: Text(
                     'En Yeni',
                     style: GoogleFonts.notoSans(
-                      color: _commentsNewestFirst ? const Color(0xFF0095FF) : Colors.white,
+                      color: _commentsNewestFirst
+                          ? const Color(0xFF0095FF)
+                          : Colors.white,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -978,7 +1434,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   child: Text(
                     'En Eski',
                     style: GoogleFonts.notoSans(
-                      color: !_commentsNewestFirst ? const Color(0xFF0095FF) : Colors.white,
+                      color: !_commentsNewestFirst
+                          ? const Color(0xFF0095FF)
+                          : Colors.white,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -998,7 +1456,11 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                       ),
                     ),
                     const SizedBox(width: 2),
-                    const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFFA1C9FF), size: 20),
+                    const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: Color(0xFFA1C9FF),
+                      size: 20,
+                    ),
                   ],
                 ),
               ),
@@ -1035,7 +1497,8 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           CircleAvatar(
             radius: depth > 0 ? (19 - depth.clamp(1, 3)).toDouble() : 18,
             backgroundColor: const Color(0xFF374151),
-            backgroundImage: c.userPhotoUrl != null && c.userPhotoUrl!.isNotEmpty
+            backgroundImage:
+                c.userPhotoUrl != null && c.userPhotoUrl!.isNotEmpty
                 ? CachedNetworkImageProvider(c.userPhotoUrl!)
                 : null,
             child: c.userPhotoUrl == null || c.userPhotoUrl!.isEmpty
@@ -1110,8 +1573,15 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                         c.userId != AuthService.backendUserId)
                       PopupMenuButton<String>(
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                        icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF6B7280)),
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        icon: const Icon(
+                          Icons.more_vert,
+                          size: 20,
+                          color: Color(0xFF6B7280),
+                        ),
                         color: const Color(0xFF27272A),
                         onSelected: (v) {
                           if (v == 'report') _reportComment(c);
@@ -1120,13 +1590,18 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                         itemBuilder: (ctx) => [
                           PopupMenuItem(
                             value: 'report',
-                            child: Text('Raporla', style: GoogleFonts.notoSans(color: Colors.white)),
+                            child: Text(
+                              'Raporla',
+                              style: GoogleFonts.notoSans(color: Colors.white),
+                            ),
                           ),
                           PopupMenuItem(
                             value: 'block',
                             child: Text(
                               'Kullanıcıyı engelle',
-                              style: GoogleFonts.notoSans(color: Colors.redAccent),
+                              style: GoogleFonts.notoSans(
+                                color: Colors.redAccent,
+                              ),
                             ),
                           ),
                         ],
@@ -1140,7 +1615,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                       onTap: busy ? null : () => _applyReaction(c, 1),
                       borderRadius: BorderRadius.circular(8),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 4,
+                        ),
                         child: Row(
                           children: [
                             Icon(
@@ -1167,7 +1645,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                       onTap: busy ? null : () => _applyReaction(c, -1),
                       borderRadius: BorderRadius.circular(8),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 4,
+                        ),
                         child: Row(
                           children: [
                             Icon(
@@ -1218,7 +1699,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                 top: BorderSide(color: Color(0x18FFFFFF), width: 1),
               ),
             ),
-            child: AuthService.isLoggedIn ? _buildCommentComposerRow() : _buildGuestBottomComposer(),
+            child: AuthService.isLoggedIn
+                ? _buildCommentComposerRow()
+                : _buildGuestBottomComposer(),
           ),
         ),
       ),
@@ -1252,7 +1735,11 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   shape: BoxShape.circle,
                   color: Color(0xFF2A2A2A),
                 ),
-                child: const Icon(Icons.send_rounded, color: Color(0xFF4B5563), size: 20),
+                child: const Icon(
+                  Icons.send_rounded,
+                  color: Color(0xFF4B5563),
+                  size: 20,
+                ),
               ),
             ],
           ),
@@ -1266,7 +1753,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     final badges = _spotlightNewBadgeIds;
     final badgeText = badges.isEmpty
         ? ''
-        : badges.map((id) => GamificationBadgeDef.byId(id)?.title ?? id).join(', ');
+        : badges
+              .map((id) => GamificationBadgeDef.byId(id)?.title ?? id)
+              .join(', ');
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
@@ -1278,12 +1767,18 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF0095FF).withValues(alpha: 0.45)),
+            border: Border.all(
+              color: const Color(0xFF0095FF).withValues(alpha: 0.45),
+            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.stars_rounded, color: Color(0xFF7DD3FC), size: 26),
+              const Icon(
+                Icons.stars_rounded,
+                color: Color(0xFF7DD3FC),
+                size: 26,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -1292,7 +1787,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                     Text(
                       pts > 0
                           ? '+$pts sosyal puan'
-                          : (badgeText.isNotEmpty ? 'Yeni rozet açıldı' : 'Puanın güncellendi'),
+                          : (badgeText.isNotEmpty
+                                ? 'Yeni rozet açıldı'
+                                : 'Puanın güncellendi'),
                       style: GoogleFonts.notoSans(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
@@ -1327,111 +1824,134 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-        if (_commentPointsSpotlightVisible) _buildCommentPointsRewardStrip(),
-        if (_replyTo != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF1F1F1F),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0x14FFFFFF)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.reply_rounded, size: 18, color: Color(0xFFA1C9FF)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${_replyTo!.userDisplayName} kullanıcısına yanıt',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.notoSans(
-                          fontSize: 13,
-                          color: const Color(0xFFE5E7EB),
+          if (_commentPointsSpotlightVisible) _buildCommentPointsRewardStrip(),
+          if (_replyTo != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1F1F1F),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0x14FFFFFF)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.reply_rounded,
+                        size: 18,
+                        color: Color(0xFFA1C9FF),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${_replyTo!.userDisplayName} kullanıcısına yanıt',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.notoSans(
+                            fontSize: 13,
+                            color: const Color(0xFFE5E7EB),
+                          ),
                         ),
                       ),
-                    ),
-                    IconButton(
-                      onPressed: () => setState(() => _replyTo = null),
-                      icon: const Icon(Icons.close, size: 20, color: Color(0xFF9CA3AF)),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: const Color(0xFF374151),
-              backgroundImage: AuthService.photoUrl != null && AuthService.photoUrl!.isNotEmpty
-                  ? CachedNetworkImageProvider(AuthService.photoUrl!)
-                  : null,
-              child: AuthService.photoUrl == null || AuthService.photoUrl!.isEmpty
-                  ? Text(
-                      (AuthService.displayName?.isNotEmpty == true
-                              ? AuthService.displayName![0]
-                              : '?')
-                          .toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                      IconButton(
+                        onPressed: () => setState(() => _replyTo = null),
+                        icon: const Icon(
+                          Icons.close,
+                          size: 20,
+                          color: Color(0xFF9CA3AF),
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
                       ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextField(
-                controller: _commentController,
-                style: GoogleFonts.notoSans(
-                  fontSize: 15,
-                  color: Colors.white,
-                ),
-                decoration: InputDecoration(
-                  hintText: _replyTo != null ? 'Yanıtını yaz...' : 'Düşüncelerini paylaş...',
-                  hintStyle: GoogleFonts.notoSans(
-                    fontSize: 15,
-                    color: const Color(0xFF6B7280),
-                  ),
-                  filled: true,
-                  fillColor: const Color(0xFF1A1A1A),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 16,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(26),
-                    borderSide: const BorderSide(color: Color(0xFF333333)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(26),
-                    borderSide: const BorderSide(color: Color(0xFF333333)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(26),
-                    borderSide: const BorderSide(color: Color(0xFF0095FF), width: 1.5),
+                    ],
                   ),
                 ),
-                maxLines: 4,
-                minLines: 1,
-                onSubmitted: (_) => _postComment(),
               ),
             ),
-            const SizedBox(width: 10),
-            _buildGradientSendButton(),
-          ],
-        ),
-      ],
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: const Color(0xFF374151),
+                backgroundImage:
+                    AuthService.photoUrl != null &&
+                        AuthService.photoUrl!.isNotEmpty
+                    ? CachedNetworkImageProvider(AuthService.photoUrl!)
+                    : null,
+                child:
+                    AuthService.photoUrl == null ||
+                        AuthService.photoUrl!.isEmpty
+                    ? Text(
+                        (AuthService.displayName?.isNotEmpty == true
+                                ? AuthService.displayName![0]
+                                : '?')
+                            .toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _commentController,
+                  style: GoogleFonts.notoSans(
+                    fontSize: 15,
+                    color: Colors.white,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: _replyTo != null
+                        ? 'Yanıtını yaz...'
+                        : 'Düşüncelerini paylaş...',
+                    hintStyle: GoogleFonts.notoSans(
+                      fontSize: 15,
+                      color: const Color(0xFF6B7280),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFF1A1A1A),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 16,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(26),
+                      borderSide: const BorderSide(color: Color(0xFF333333)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(26),
+                      borderSide: const BorderSide(color: Color(0xFF333333)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(26),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF0095FF),
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                  maxLines: 4,
+                  minLines: 1,
+                  onSubmitted: (_) => _postComment(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              _buildGradientSendButton(),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1453,10 +1973,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0095FF),
-                  Color(0xFF0070E0),
-                ],
+                colors: [Color(0xFF0095FF), Color(0xFF0070E0)],
               ),
             ),
             child: Center(
@@ -1469,7 +1986,11 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                         color: Colors.white,
                       ),
                     )
-                  : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
+                  : const Icon(
+                      Icons.send_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
             ),
           ),
         ),
@@ -1498,35 +2019,37 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
             height: height,
           )
         : (item.displayImageUrl != null && item.displayImageUrl!.isNotEmpty
-            ? MotivationCachedImage(
-                imageUrl: item.displayImageUrl!,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: height,
-                placeholder: (_, __) => Container(
-                  color: const Color(0xFF0E0E0E),
-                  child: const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF0095FF)),
+              ? MotivationCachedImage(
+                  imageUrl: item.displayImageUrl!,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: height,
+                  placeholder: (_, __) => Container(
+                    color: const Color(0xFF0E0E0E),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF0095FF),
+                      ),
+                    ),
                   ),
-                ),
-                error: (_, __, ___) => Container(
+                  error: (_, __, ___) => Container(
+                    color: const Color(0xFF0E0E0E),
+                    child: const Icon(
+                      Icons.image_not_supported_outlined,
+                      color: Color(0xFF6B7280),
+                      size: 48,
+                    ),
+                  ),
+                )
+              : Container(
                   color: const Color(0xFF0E0E0E),
+                  alignment: Alignment.center,
                   child: const Icon(
-                    Icons.image_not_supported_outlined,
+                    Icons.image_outlined,
                     color: Color(0xFF6B7280),
-                    size: 48,
+                    size: 64,
                   ),
-                ),
-              )
-            : Container(
-                color: const Color(0xFF0E0E0E),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.image_outlined,
-                  color: Color(0xFF6B7280),
-                  size: 64,
-                ),
-              ));
+                ));
   }
 
   String _formatDate(String? sentAt) {
@@ -1535,8 +2058,18 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       final parsed = DateTime.tryParse(sentAt);
       if (parsed != null) {
         const months = [
-          'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-          'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+          'Ocak',
+          'Şubat',
+          'Mart',
+          'Nisan',
+          'Mayıs',
+          'Haziran',
+          'Temmuz',
+          'Ağustos',
+          'Eylül',
+          'Ekim',
+          'Kasım',
+          'Aralık',
         ];
         return '${parsed.day} ${months[parsed.month - 1]} ${parsed.year}';
       }
@@ -1569,7 +2102,11 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                     color: const Color(0xFF25D366),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.chat_rounded, color: Colors.white, size: 24),
+                  child: const Icon(
+                    Icons.chat_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
                 ),
                 title: Text(
                   'WhatsApp ile Paylaş',
@@ -1585,7 +2122,10 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   final uri = Uri.parse('whatsapp://send?text=$encoded');
                   try {
                     if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
                     } else {
                       await Share.share(text, subject: item.title);
                     }
@@ -1604,7 +2144,11 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                     color: const Color(0xFF2A2A2A),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.share_rounded, color: Color(0xFFA1C9FF), size: 24),
+                  child: const Icon(
+                    Icons.share_rounded,
+                    color: Color(0xFFA1C9FF),
+                    size: 24,
+                  ),
                 ),
                 title: Text(
                   'Diğer uygulamalarla paylaş',

@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import '../widgets/app_spotlight_layer.dart';
 
 import '../models/gamification_badge.dart';
 import '../services/auth_service.dart';
+import '../services/content_sync_service.dart';
 import '../services/gamification_service.dart';
+import '../services/onboarding_service.dart';
 import '../widgets/app_top_bar.dart';
 import '../widgets/first_badges_back_coach.dart';
 import 'login_page.dart';
@@ -34,7 +36,8 @@ class _BadgesPageState extends State<BadgesPage> {
   bool _backCoachMinViewElapsed = false;
   Timer? _backCoachMinViewTimer;
   Timer? _backCoachFallbackTimer;
-  TutorialCoachMark? _badgesBackCoach;
+  final GlobalKey _firstActionCardTourKey = GlobalKey();
+  bool _fullTourWeeklyTileCoachShown = false;
 
   /// Kaydırma ile tetiklemek için toplam ofset (küçük kaydırmalar tek seferde spotlight açmasın).
   static const double _kBackCoachScrollThresholdPx = 140;
@@ -62,6 +65,7 @@ class _BadgesPageState extends State<BadgesPage> {
   static _BadgeViewModel _guestPreviewViewModelForFirstLaunch() {
     return _BadgeViewModel(
       points: 320,
+      hasAnyAction: false,
       unlocked: {
         'social_first',
         'social_10',
@@ -73,7 +77,7 @@ class _BadgesPageState extends State<BadgesPage> {
   @override
   void dispose() {
     _teardownBackCoachGate();
-    _badgesBackCoach?.removeOverlayEntry();
+    AppSpotlightLayer.removeOverlayEntry();
     GamificationService.onStateChanged.removeListener(_onGamificationChanged);
     _scrollController.dispose();
     super.dispose();
@@ -127,7 +131,7 @@ class _BadgesPageState extends State<BadgesPage> {
     if (!mounted || !widget.firstLaunchPreview || _badgesBackCoachScheduled) return;
     _badgesBackCoachScheduled = true;
     _teardownBackCoachGate();
-    _badgesBackCoach = FirstBadgesBackCoach.show(
+    FirstBadgesBackCoach.show(
       context: context,
       backButtonKey: _backCoachKey,
     );
@@ -138,14 +142,68 @@ class _BadgesPageState extends State<BadgesPage> {
     if (mounted) setState(() => _future = _load());
   }
 
+  Future<void> _maybeShowFullTourWeeklyTileCoach() async {
+    if (!mounted || _fullTourWeeklyTileCoachShown) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftProfileSpotlight) return;
+    _fullTourWeeklyTileCoachShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 220));
+      if (!mounted || _firstActionCardTourKey.currentContext == null) {
+        _fullTourWeeklyTileCoachShown = false;
+        return;
+      }
+      AppSpotlightLayer.show(
+        context: context,
+        targetKey: _firstActionCardTourKey,
+        holePadding: const EdgeInsets.all(8),
+        holeBorderRadius: 14,
+        onHoleTap: () {},
+        caption: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF2C2C2E)),
+          ),
+          child: Text(
+            'Adım 21/28\n\nİlk aksiyon kartın burada. Karta dokun; bir sonraki adımda Keşfet sekmesine yönlendirileceksin.',
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFFE2E2E2),
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+        ),
+        onClosed: (reason) {
+          _fullTourWeeklyTileCoachShown = false;
+          if (reason == AppSpotlightReason.skipped) return;
+          if (reason != AppSpotlightReason.targetTapped) return;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            final moved =
+                await OnboardingService.onPostBadgesFirstActionCoachFinished();
+            if (!mounted) return;
+            if (!moved) return;
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+            OnboardingService.requestTab(0);
+          });
+        },
+      );
+    });
+  }
+
   Future<_BadgeViewModel> _load() async {
     if (!AuthService.isLoggedIn) {
-      return _BadgeViewModel(points: 0, unlocked: {});
+      return _BadgeViewModel(points: 0, hasAnyAction: false, unlocked: {});
     }
+    await ContentSyncService.syncFromBackend();
     await GamificationService.syncFromBackend();
     final snap = await GamificationService.readSnapshot();
     return _BadgeViewModel(
       points: snap.socialPoints,
+      hasAnyAction: snap.maxStreakRecorded > 0,
       unlocked: snap.unlocked,
     );
   }
@@ -263,10 +321,11 @@ class _BadgesPageState extends State<BadgesPage> {
             ),
           );
         }
-        final vm = snapshot.data ?? _BadgeViewModel(points: 0, unlocked: {});
+        final vm = snapshot.data ?? _BadgeViewModel(points: 0, hasAnyAction: false, unlocked: {});
         final earned = GamificationBadgeDef.catalog.where((b) => vm.unlocked.contains(b.id)).length;
         final total = GamificationBadgeDef.catalog.length;
         final progress = total > 0 ? earned / total : 0.0;
+        unawaited(_maybeShowFullTourWeeklyTileCoach());
 
         if (widget.firstLaunchPreview &&
             !_firstLaunchBackCoachGateDone &&
@@ -335,10 +394,20 @@ class _BadgesPageState extends State<BadgesPage> {
                 const SizedBox(height: 16),
                 ...GamificationBadgeDef.catalog.map((b) {
                   final on = vm.unlocked.contains(b.id);
-                  return Padding(
+                  final tile = Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _BadgeTileFigma(badge: b, unlocked: on),
                   );
+                  if (b.id == 'streak_7') {
+                    return Column(
+                      children: [
+                        _buildFirstActionTakenCard(unlocked: vm.hasAnyAction),
+                        const SizedBox(height: 12),
+                        tile,
+                      ],
+                    );
+                  }
+                  return tile;
                 }),
                 const SizedBox(height: 8),
                 _buildInfoFooter(),
@@ -493,6 +562,64 @@ class _BadgesPageState extends State<BadgesPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildFirstActionTakenCard({required bool unlocked}) {
+    final title = unlocked ? 'İlk aksiyonu aldın' : 'İlk aksiyonunu ekle';
+    final subtitle = unlocked
+        ? 'Harika başlangıç. Zinciri sürdürerek yeni rozetlerin kilidini aç.'
+        : 'Günün aksiyonunu ekleyerek ilk kartını aktif hale getir.';
+    final iconColor = unlocked ? const Color(0xFF0095FF) : const Color(0xFF6B7280);
+    return KeyedSubtree(
+      key: _firstActionCardTourKey,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.task_alt_rounded, color: iconColor, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.notoSans(
+                      color: const Color(0xFFE5E5EA),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.notoSans(
+                      color: const Color(0xFF9CA3AF),
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -734,10 +861,12 @@ class _BadgeTileFigma extends StatelessWidget {
 
 class _BadgeViewModel {
   final int points;
+  final bool hasAnyAction;
   final Set<String> unlocked;
 
   _BadgeViewModel({
     required this.points,
+    required this.hasAnyAction,
     required this.unlocked,
   });
 }

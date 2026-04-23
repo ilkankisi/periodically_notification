@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../widgets/app_spotlight_layer.dart';
 
 import '../models/motivation.dart';
 import '../widgets/motivation_cached_image.dart';
@@ -21,11 +22,7 @@ import 'content_detail_page.dart';
 
 /// Keşfet sayfası — Figma 60-676: arama, chip filtreler, dikey immersive kart akışı.
 class ExplorePage extends StatefulWidget {
-  const ExplorePage({
-    super.key,
-    this.showBottomBar = true,
-    this.onTabTap,
-  });
+  const ExplorePage({super.key, this.showBottomBar = true, this.onTabTap});
 
   final bool showBottomBar;
   final ValueChanged<int>? onTabTap;
@@ -39,8 +36,11 @@ class _ExplorePageState extends State<ExplorePage> {
 
   final GlobalKey _exploreHeaderKey = GlobalKey();
   final GlobalKey _firstBookmarkKey = GlobalKey();
+  final GlobalKey _postTourFirstCardKey = GlobalKey();
   int? _fullTourPhaseCache;
   bool _fullTourIntroScheduled = false;
+  bool _postBadgesFirstCardCoachScheduled = false;
+
   /// ($categoryKey, $uppercaseLabel) — key null = Tümü
   static const List<(String?, String)> _categoryFilters = [
     (null, 'TÜMÜ'),
@@ -65,14 +65,17 @@ class _ExplorePageState extends State<ExplorePage> {
 
   Future<void> _refreshFullTourPhase() async {
     await OnboardingService.ensureFullTourMigrated();
-    final p = await OnboardingService.getFullTourPhase();
+    final p = await OnboardingService.getGlobalTourStep();
     if (!mounted) return;
     setState(() => _fullTourPhaseCache = p);
     unawaited(_maybeRunFullTourCoaches());
+    unawaited(_maybePostBadgesFirstCardCoach());
   }
 
   Future<void> _maybeRunFullTourCoaches() async {
-    final p = _fullTourPhaseCache ?? await OnboardingService.getFullTourPhase();
+    final p =
+        _fullTourPhaseCache ?? await OnboardingService.getGlobalTourStep();
+    if (p >= OnboardingService.ftPostBadgesExploreTab) return;
     if (p == OnboardingService.ftExploreIntro && !_fullTourIntroScheduled) {
       _fullTourIntroScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -83,9 +86,13 @@ class _ExplorePageState extends State<ExplorePage> {
           context: context,
           headerKey: _exploreHeaderKey,
           onFinished: () async {
-            await OnboardingService.setFullTourPhase(OnboardingService.ftExploreSave);
+            await OnboardingService.setGlobalTourStep(
+              OnboardingService.ftExploreSave,
+            );
             if (mounted) {
-              setState(() => _fullTourPhaseCache = OnboardingService.ftExploreSave);
+              setState(
+                () => _fullTourPhaseCache = OnboardingService.ftExploreSave,
+              );
             }
             await Future<void>.delayed(const Duration(milliseconds: 400));
             if (!mounted || _filteredItems.isEmpty) return;
@@ -110,6 +117,76 @@ class _ExplorePageState extends State<ExplorePage> {
     }
   }
 
+  Future<void> _maybePostBadgesFirstCardCoach() async {
+    if (!mounted || _postBadgesFirstCardCoachScheduled) return;
+    final p =
+        _fullTourPhaseCache ?? await OnboardingService.getGlobalTourStep();
+    if (p != OnboardingService.ftPostBadgesExploreFirstCard) return;
+    if (_filteredItems.isEmpty) return;
+    _postBadgesFirstCardCoachScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 420));
+      if (!mounted || _postTourFirstCardKey.currentContext == null) {
+        _postBadgesFirstCardCoachScheduled = false;
+        return;
+      }
+      AppSpotlightLayer.show(
+        context: context,
+        targetKey: _postTourFirstCardKey,
+        holePadding: const EdgeInsets.all(8),
+        holeBorderRadius: 16,
+        captionAlignment: Alignment.bottomCenter,
+        captionMargin: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+        caption: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF2C2C2E)),
+          ),
+          child: Text(
+            'Bu kartla başla: karta dokunarak içeriği aç ve sonraki adımda kaydet.',
+            style: GoogleFonts.notoSans(
+              color: const Color(0xFFE2E2E2),
+              fontSize: 14,
+              height: 1.35,
+            ),
+          ),
+        ),
+        onClosed: (_) {
+          _postBadgesFirstCardCoachScheduled = false;
+        },
+      );
+    });
+  }
+
+  Future<void> _onExploreHeroCardTap(Motivation item) async {
+    if (AppSpotlightLayer.isShowing) {
+      AppSpotlightLayer.completeTargetTap();
+    }
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp == OnboardingService.ftPostBadgesExploreFirstCard) {
+      final first = _filteredItems.isNotEmpty ? _filteredItems.first : null;
+      if (first != null && first.id == item.id) {
+        final moved = await OnboardingService.onPostBadgesExploreFirstCardFinished();
+        if (!mounted) return;
+        if (moved) {
+          setState(
+            () => _fullTourPhaseCache =
+                OnboardingService.ftPostBadgesDetailSaveCard,
+          );
+        }
+      }
+    }
+    if (!mounted) return;
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (context) => ContentDetailPage(item: item),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -118,7 +195,8 @@ class _ExplorePageState extends State<ExplorePage> {
 
   List<Motivation> get _filteredItems {
     var result = _items;
-    if (_selectedCategoryIndex > 0 && _selectedCategoryIndex < _categoryFilters.length) {
+    if (_selectedCategoryIndex > 0 &&
+        _selectedCategoryIndex < _categoryFilters.length) {
       final key = _categoryFilters[_selectedCategoryIndex].$1;
       if (key != null) {
         result = result.where((m) => (m.category ?? '') == key).toList();
@@ -210,7 +288,11 @@ class _ExplorePageState extends State<ExplorePage> {
                 children: [
                   IconButton(
                     tooltip: 'Aksiyon zinciri',
-                    icon: const Icon(Icons.link_rounded, color: Color(0xFFE8E8E8), size: 24),
+                    icon: const Icon(
+                      Icons.link_rounded,
+                      color: Color(0xFFE8E8E8),
+                      size: 24,
+                    ),
                     onPressed: _openChain,
                   ),
                   AnimatedBuilder(
@@ -223,7 +305,11 @@ class _ExplorePageState extends State<ExplorePage> {
                         children: [
                           IconButton(
                             tooltip: 'Bildirimler',
-                            icon: const Icon(Icons.notifications_none_rounded, color: Color(0xFFE8E8E8), size: 26),
+                            icon: const Icon(
+                              Icons.notifications_none_rounded,
+                              color: Color(0xFFE8E8E8),
+                              size: 26,
+                            ),
                             onPressed: _openNotifications,
                           ),
                           if (showBadge)
@@ -236,11 +322,18 @@ class _ExplorePageState extends State<ExplorePage> {
                                   color: Colors.redAccent,
                                   shape: BoxShape.circle,
                                 ),
-                                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
                                 child: Center(
                                   child: Text(
                                     count > 9 ? '9+' : count.toString(),
-                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -274,7 +367,8 @@ class _ExplorePageState extends State<ExplorePage> {
                 backgroundColor: const Color(0xFF1F1F1F),
                 onRefresh: _load,
                 child: CustomScrollView(
-                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
                     SliverToBoxAdapter(
@@ -284,7 +378,8 @@ class _ExplorePageState extends State<ExplorePage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _buildSearchBar(),
-                            if (_searchHistory.isNotEmpty && _searchQuery.isEmpty) ...[
+                            if (_searchHistory.isNotEmpty &&
+                                _searchQuery.isEmpty) ...[
                               const SizedBox(height: 16),
                               _buildSearchHistorySection(),
                             ],
@@ -310,30 +405,45 @@ class _ExplorePageState extends State<ExplorePage> {
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
                         sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final item = filtered[index];
-                              final featured = index == 0 && _searchQuery.isEmpty;
-                              final tourSave = _fullTourPhaseCache == OnboardingService.ftExploreSave;
-                              final bookmarkKey = (index == 0 && tourSave) ? _firstBookmarkKey : null;
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: _buildExploreHeroCard(
-                                  item,
-                                  featured: featured,
-                                  tourBookmarkKey: bookmarkKey,
-                                ),
-                              );
-                            },
-                            childCount: filtered.length,
-                          ),
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            final item = filtered[index];
+                            final featured = index == 0 && _searchQuery.isEmpty;
+                            final tourSave =
+                                _fullTourPhaseCache ==
+                                OnboardingService.ftExploreSave;
+                            final bookmarkKey = (index == 0 && tourSave)
+                                ? _firstBookmarkKey
+                                : null;
+                            final postTourFirst =
+                                _fullTourPhaseCache ==
+                                    OnboardingService
+                                        .ftPostBadgesExploreFirstCard;
+                            final postTourCardKey =
+                                (index == 0 && _searchQuery.isEmpty && postTourFirst)
+                                ? _postTourFirstCardKey
+                                : null;
+                            Widget card = _buildExploreHeroCard(
+                              item,
+                              featured: featured,
+                              tourBookmarkKey: bookmarkKey,
+                              tourFirstCardKey: postTourCardKey,
+                            );
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: card,
+                            );
+                          }, childCount: filtered.length),
                         ),
                       ),
                   ],
                 ),
               ),
             ),
-            if (widget.showBottomBar) BottomNavBar(activeIndex: 1, onTabTap: widget.onTabTap),
+            if (widget.showBottomBar)
+              BottomNavBar(activeIndex: 1, onTabTap: widget.onTabTap),
           ],
         ),
       ),
@@ -352,13 +462,20 @@ class _ExplorePageState extends State<ExplorePage> {
         children: [
           const Padding(
             padding: EdgeInsets.only(left: 16),
-            child: Icon(Icons.search_rounded, color: Color(0xFF6B7280), size: 22),
+            child: Icon(
+              Icons.search_rounded,
+              color: Color(0xFF6B7280),
+              size: 22,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: TextField(
               controller: _searchController,
-              style: GoogleFonts.notoSans(color: const Color(0xFFE2E2E2), fontSize: 15),
+              style: GoogleFonts.notoSans(
+                color: const Color(0xFFE2E2E2),
+                fontSize: 15,
+              ),
               decoration: InputDecoration(
                 hintText: 'Konu, içerik veya yazar ara...',
                 hintStyle: GoogleFonts.notoSans(
@@ -369,14 +486,19 @@ class _ExplorePageState extends State<ExplorePage> {
                 contentPadding: EdgeInsets.zero,
                 isDense: true,
               ),
-              onChanged: (_) => setState(() => _searchQuery = _searchController.text.trim()),
+              onChanged: (_) =>
+                  setState(() => _searchQuery = _searchController.text.trim()),
               onSubmitted: (_) => _addCurrentSearchToHistory(),
               onEditingComplete: _addCurrentSearchToHistory,
             ),
           ),
           if (_searchQuery.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.clear_rounded, color: Color(0xFFBFC7D5), size: 22),
+              icon: const Icon(
+                Icons.clear_rounded,
+                color: Color(0xFFBFC7D5),
+                size: 22,
+              ),
               onPressed: () {
                 _searchController.clear();
                 setState(() => _searchQuery = '');
@@ -445,7 +567,11 @@ class _ExplorePageState extends State<ExplorePage> {
                       setState(() => _searchQuery = query);
                     },
                     child: Padding(
-                      padding: const EdgeInsets.only(left: 14, top: 8, bottom: 8),
+                      padding: const EdgeInsets.only(
+                        left: 14,
+                        top: 8,
+                        bottom: 8,
+                      ),
                       child: Text(
                         query,
                         style: GoogleFonts.notoSans(
@@ -462,8 +588,17 @@ class _ExplorePageState extends State<ExplorePage> {
                       if (mounted) setState(() => _searchHistory = history);
                     },
                     child: Padding(
-                      padding: const EdgeInsets.only(left: 4, right: 10, top: 8, bottom: 8),
-                      child: Icon(Icons.close_rounded, color: const Color(0xFFBFC7D5).withValues(alpha: 0.8), size: 16),
+                      padding: const EdgeInsets.only(
+                        left: 4,
+                        right: 10,
+                        top: 8,
+                        bottom: 8,
+                      ),
+                      child: Icon(
+                        Icons.close_rounded,
+                        color: const Color(0xFFBFC7D5).withValues(alpha: 0.8),
+                        size: 16,
+                      ),
                     ),
                   ),
                 ],
@@ -492,10 +627,14 @@ class _ExplorePageState extends State<ExplorePage> {
               curve: Curves.easeOut,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
               decoration: BoxDecoration(
-                color: selected ? const Color(0xFF0095FF) : const Color(0xFF2A2A2A),
+                color: selected
+                    ? const Color(0xFF0095FF)
+                    : const Color(0xFF2A2A2A),
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(
-                  color: selected ? const Color(0xFF0095FF) : const Color(0xFF3D3D3D),
+                  color: selected
+                      ? const Color(0xFF0095FF)
+                      : const Color(0xFF3D3D3D),
                   width: 1,
                 ),
               ),
@@ -521,13 +660,14 @@ class _ExplorePageState extends State<ExplorePage> {
     Motivation item, {
     bool featured = false,
     GlobalKey? tourBookmarkKey,
+    GlobalKey? tourFirstCardKey,
   }) {
     final imageUrl = item.displayImageUrl ?? '';
     final saved = _savedIds.contains(item.id);
     final categoryLabel = (item.category ?? 'İçerik').toUpperCase();
     final h = featured ? 300.0 : 268.0;
 
-    return ClipRRect(
+    final outer = ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: SizedBox(
         height: h,
@@ -536,12 +676,7 @@ class _ExplorePageState extends State<ExplorePage> {
           fit: StackFit.expand,
           children: [
             GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ContentDetailPage(item: item),
-                ),
-              ),
+              onTap: () => unawaited(_onExploreHeroCardTap(item)),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -554,8 +689,10 @@ class _ExplorePageState extends State<ExplorePage> {
                     MotivationCachedImage(
                       imageUrl: imageUrl,
                       fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(color: const Color(0xFF0E0E0E)),
-                      error: (_, __, ___) => Container(color: const Color(0xFF0E0E0E)),
+                      placeholder: (_, __) =>
+                          Container(color: const Color(0xFF0E0E0E)),
+                      error: (_, __, ___) =>
+                          Container(color: const Color(0xFF0E0E0E)),
                     )
                   else
                     Container(color: const Color(0xFF0E0E0E)),
@@ -609,7 +746,11 @@ class _ExplorePageState extends State<ExplorePage> {
                             fontWeight: FontWeight.w700,
                             height: 1.15,
                             shadows: const [
-                              Shadow(color: Color(0x99000000), blurRadius: 16, offset: Offset(0, 2)),
+                              Shadow(
+                                color: Color(0x99000000),
+                                blurRadius: 16,
+                                offset: Offset(0, 2),
+                              ),
                             ],
                           ),
                         ),
@@ -640,7 +781,9 @@ class _ExplorePageState extends State<ExplorePage> {
                 _buildExploreBookmarkButton(
                   saved: saved,
                   onToggle: () async {
-                    final nowSaved = await SavedItemsService.toggleSaved(item.id);
+                    final nowSaved = await SavedItemsService.toggleSaved(
+                      item.id,
+                    );
                     if (!mounted) return;
                     setState(() {
                       if (nowSaved) {
@@ -649,11 +792,15 @@ class _ExplorePageState extends State<ExplorePage> {
                         _savedIds.remove(item.id);
                       }
                     });
-                    final ftp = await OnboardingService.getFullTourPhase();
+                    final ftp = await OnboardingService.getGlobalTourStep();
                     if (ftp == OnboardingService.ftExploreSave && nowSaved) {
-                      await OnboardingService.setFullTourPhase(OnboardingService.ftSavedList);
+                      final moved = await OnboardingService.onExploreSavedFirstItem();
+                      if (!moved) return;
                       if (mounted) {
-                        setState(() => _fullTourPhaseCache = OnboardingService.ftSavedList);
+                        setState(
+                          () => _fullTourPhaseCache =
+                              OnboardingService.ftSavedList,
+                        );
                       }
                       OnboardingService.requestTab(2);
                     }
@@ -665,6 +812,10 @@ class _ExplorePageState extends State<ExplorePage> {
         ),
       ),
     );
+    if (tourFirstCardKey != null) {
+      return KeyedSubtree(key: tourFirstCardKey, child: outer);
+    }
+    return outer;
   }
 
   Widget _wrapTourKey(GlobalKey? key, Widget child) {
@@ -714,5 +865,4 @@ class _ExplorePageState extends State<ExplorePage> {
       ),
     );
   }
-
 }

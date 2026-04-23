@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../models/motivation.dart';
 import '../services/user_motivation_service.dart';
 import '../widgets/header_bar.dart';
 import 'content_detail_page.dart';

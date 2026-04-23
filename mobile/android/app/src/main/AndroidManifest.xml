@@ -58,6 +58,8 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- Google Sign-In: Play Services paketini görünür kılar (Android 11+). -->
+        <package android:name="com.google.android.gms" />
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'widgets/app_spotlight_layer.dart';
 import 'services/api_config.dart';
 import 'services/auth_service.dart';
 import 'services/backend_service.dart';
@@ -12,7 +13,6 @@ import 'screens/explore_page.dart';
 import 'screens/saved_page.dart';
 import 'screens/profile_page.dart';
 import 'screens/value_proposition_onboarding.dart';
-import 'screens/login_page.dart';
 import 'widgets/bottom_nav_bar.dart';
 
 void appLog(String message) {
@@ -65,14 +65,23 @@ class _MyAppState extends State<MyApp> {
   Future<void> _loadWidgetData() async {
     appLog('Widget data yükleniyor...');
     try {
-      final title = await HomeWidget.getWidgetData<String>('widget_title', defaultValue: 'Günün İçeriği');
-      final body = await HomeWidget.getWidgetData<String>('widget_body', defaultValue: 'Veri bekleniyor...');
-      final updatedAt = await HomeWidget.getWidgetData<String>('widget_updatedAt', defaultValue: '');
-      
+      final title = await HomeWidget.getWidgetData<String>(
+        'widget_title',
+        defaultValue: 'Günün İçeriği',
+      );
+      final body = await HomeWidget.getWidgetData<String>(
+        'widget_body',
+        defaultValue: 'Veri bekleniyor...',
+      );
+      final updatedAt = await HomeWidget.getWidgetData<String>(
+        'widget_updatedAt',
+        defaultValue: '',
+      );
+
       appLog('Widget title: $title');
       appLog('Widget body: $body');
       appLog('Widget updatedAt: $updatedAt');
-      
+
       setState(() {
         widgetTitle = title ?? 'Günün İçeriği';
         widgetBody = body ?? 'Veri bekleniyor...';
@@ -115,9 +124,7 @@ class _MyAppState extends State<MyApp> {
       appLog('ERROR _MyAppState.build: $e');
       appLog('Stack trace: $st');
       return MaterialApp(
-        home: Scaffold(
-          body: Center(child: Text('Error: $e')),
-        ),
+        home: Scaffold(body: Center(child: Text('Error: $e'))),
       );
     }
   }
@@ -185,7 +192,16 @@ class _MainShell extends StatefulWidget {
 
 class _MainShellState extends State<_MainShell> {
   int _currentIndex = 0;
-  bool _loginPushScheduled = false;
+  final GlobalKey _profileTabKey = GlobalKey();
+  final GlobalKey _exploreTabKey = GlobalKey();
+  final GlobalKey _savedTabKey = GlobalKey();
+  final GlobalKey _exploreRailIdleKey = GlobalKey();
+  final GlobalKey _exploreRailSelectedKey = GlobalKey();
+  final GlobalKey _savedRailIdleKey = GlobalKey();
+  final GlobalKey _savedRailSelectedKey = GlobalKey();
+  bool _profileTabSpotlightScheduled = false;
+  bool _postBadgesExploreTabSpotlightScheduled = false;
+  bool _postBadgesSavedTabSpotlightScheduled = false;
 
   static const _destinations = [
     (icon: Icons.home_outlined, label: 'Anasayfa'),
@@ -198,7 +214,12 @@ class _MainShellState extends State<_MainShell> {
   void initState() {
     super.initState();
     OnboardingService.registerTabRequestHandler(_onTabTap);
-    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_maybeOpenLoginForFullTour()));
+    unawaited(_prepareDebugTourStart());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_maybeShowProfileTabSpotlight());
+      unawaited(_maybeShowPostBadgesExploreTabSpotlight());
+      unawaited(_maybeShowPostBadgesSavedTabSpotlight());
+    });
   }
 
   @override
@@ -207,32 +228,9 @@ class _MainShellState extends State<_MainShell> {
     super.dispose();
   }
 
-  Future<void> _maybeOpenLoginForFullTour() async {
-    if (_loginPushScheduled) return;
-    await OnboardingService.ensureFullTourMigrated();
-    if (!mounted) return;
-    final phase = await OnboardingService.getFullTourPhase();
-    if (!mounted) return;
-    if (phase != OnboardingService.ftNeedLogin) {
-      return;
-    }
-    if (AuthService.isLoggedIn) {
-      await OnboardingService.setFullTourPhase(OnboardingService.ftNeedHomeAction);
-      return;
-    }
-    _loginPushScheduled = true;
-    if (!mounted) return;
-    final nav = Navigator.of(context);
-    await nav.push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (context) => const LoginPage(onboardingFullTour: true),
-      ),
-    );
-    _loginPushScheduled = false;
-    if (!mounted) return;
-    if (AuthService.isLoggedIn) {
-      await OnboardingService.setFullTourPhase(OnboardingService.ftNeedHomeAction);
-    }
+  Future<void> _prepareDebugTourStart() async {
+    if (!OnboardingService.kDebugRepeatFullTour) return;
+    await OnboardingService.resetFullTourForDebug();
   }
 
   @override
@@ -241,17 +239,19 @@ class _MainShellState extends State<_MainShell> {
     final navBar = BottomNavBar(
       activeIndex: _currentIndex,
       onTabTap: _onTabTap,
+      itemKeys: [null, _exploreTabKey, _savedTabKey, _profileTabKey],
     );
     final body = IndexedStack(
       index: _currentIndex,
       children: [
-        HomePage(
-          showBottomBar: false,
-          onTabTap: _onTabTap,
-        ),
+        HomePage(showBottomBar: false, onTabTap: _onTabTap),
         ExplorePage(showBottomBar: false, onTabTap: _onTabTap),
         SavedPage(showBottomBar: false, onTabTap: _onTabTap),
-        ProfilePage(showBottomBar: false, onTabTap: _onTabTap),
+        ProfilePage(
+          showBottomBar: false,
+          onTabTap: _onTabTap,
+          isMainShellActiveTab: _currentIndex == 3,
+        ),
       ],
     );
 
@@ -265,13 +265,20 @@ class _MainShellState extends State<_MainShell> {
               selectedIndex: _currentIndex,
               onDestinationSelected: _onTabTap,
               labelType: NavigationRailLabelType.all,
-              destinations: _destinations
-                  .map((d) => NavigationRailDestination(
-                        icon: Icon(d.icon, color: const Color(0xFF9CA3AF)),
-                        selectedIcon: Icon(d.icon, color: const Color(0xFF0095FF)),
-                        label: Text(d.label, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                      ))
-                  .toList(),
+              destinations: [
+                for (var i = 0; i < _destinations.length; i++)
+                  NavigationRailDestination(
+                    icon: _railLeadingIcon(i, false),
+                    selectedIcon: _railLeadingIcon(i, true),
+                    label: Text(
+                      _destinations[i].label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             Expanded(child: body),
           ],
@@ -286,9 +293,202 @@ class _MainShellState extends State<_MainShell> {
     );
   }
 
+  /// NavigationRail hem [icon] hem [selectedIcon] ağacında tuttuğu için iki ayrı anahtar.
+  GlobalKey _pickRailSpotlightKey(GlobalKey idle, GlobalKey selected) {
+    if (selected.currentContext != null) return selected;
+    if (idle.currentContext != null) return idle;
+    return selected;
+  }
+
+  Widget _railLeadingIcon(int index, bool selected) {
+    final d = _destinations[index];
+    final icon = Icon(
+      d.icon,
+      color: selected
+          ? const Color(0xFF0095FF)
+          : const Color(0xFF9CA3AF),
+    );
+    final GlobalKey? key;
+    if (index == 1) {
+      key = selected ? _exploreRailSelectedKey : _exploreRailIdleKey;
+    } else if (index == 2) {
+      key = selected ? _savedRailSelectedKey : _savedRailIdleKey;
+    } else {
+      key = null;
+    }
+    if (key != null) return KeyedSubtree(key: key, child: icon);
+    return icon;
+  }
+
   void _onTabTap(int index) {
-    if (index == _currentIndex) return;
-    setState(() => _currentIndex = index);
+    if (index != _currentIndex) {
+      setState(() => _currentIndex = index);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_maybeShowProfileTabSpotlight());
+      unawaited(_maybeShowPostBadgesExploreTabSpotlight());
+      unawaited(_maybeShowPostBadgesSavedTabSpotlight());
+    });
+  }
+
+  Future<void> _maybeShowProfileTabSpotlight() async {
+    if (!mounted || _profileTabSpotlightScheduled) return;
+    if (MediaQuery.sizeOf(context).width >= 600) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftNeedProfileTabTap) return;
+    _profileTabSpotlightScheduled = true;
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted || _profileTabKey.currentContext == null) {
+      _profileTabSpotlightScheduled = false;
+      return;
+    }
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: _profileTabKey,
+      holePadding: const EdgeInsets.all(6),
+      holeBorderRadius: 12,
+      onHoleTap: () => _onTabTap(3),
+      caption: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
+        ),
+        child: const Text(
+          'Profil sayfasına geçmek için sağ alttaki PROFİL sekmesine dokun.',
+          style: TextStyle(
+            color: Color(0xFFE2E2E2),
+            fontSize: 14,
+            height: 1.35,
+          ),
+        ),
+      ),
+      onClosed: (reason) {
+        if (reason == AppSpotlightReason.skipped) {
+          _profileTabSpotlightScheduled = false;
+          return;
+        }
+        if (reason != AppSpotlightReason.targetTapped) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final moved = await OnboardingService.onHomeProfileTabSpotlightTapped();
+          if (!mounted) return;
+          _profileTabSpotlightScheduled = false;
+          if (moved) _onTabTap(3);
+        });
+      },
+    );
+  }
+
+  Future<void> _maybeShowPostBadgesExploreTabSpotlight() async {
+    if (!mounted || _postBadgesExploreTabSpotlightScheduled) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftPostBadgesExploreTab) return;
+    _postBadgesExploreTabSpotlightScheduled = true;
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) {
+      _postBadgesExploreTabSpotlightScheduled = false;
+      return;
+    }
+    final isTablet = MediaQuery.sizeOf(context).width >= 600;
+    final GlobalKey key = isTablet
+        ? _pickRailSpotlightKey(_exploreRailIdleKey, _exploreRailSelectedKey)
+        : _exploreTabKey;
+    if (key.currentContext == null) {
+      _postBadgesExploreTabSpotlightScheduled = false;
+      return;
+    }
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: key,
+      holePadding: const EdgeInsets.all(6),
+      holeBorderRadius: 12,
+      onHoleTap: () => _onTabTap(1),
+      caption: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
+        ),
+        child: const Text(
+          'Keşfet sekmesine dokunarak yeni içeriklere göz at.',
+          style: TextStyle(
+            color: Color(0xFFE2E2E2),
+            fontSize: 14,
+            height: 1.35,
+          ),
+        ),
+      ),
+      onClosed: (reason) {
+        if (reason == AppSpotlightReason.skipped) {
+          _postBadgesExploreTabSpotlightScheduled = false;
+          return;
+        }
+        if (reason != AppSpotlightReason.targetTapped) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final moved = await OnboardingService.onPostBadgesExploreTabTapped();
+          if (!mounted) return;
+          _postBadgesExploreTabSpotlightScheduled = false;
+          if (moved) _onTabTap(1);
+        });
+      },
+    );
+  }
+
+  Future<void> _maybeShowPostBadgesSavedTabSpotlight() async {
+    if (!mounted || _postBadgesSavedTabSpotlightScheduled) return;
+    final ftp = await OnboardingService.getGlobalTourStep();
+    if (ftp != OnboardingService.ftPostBadgesSavedTab) return;
+    _postBadgesSavedTabSpotlightScheduled = true;
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) {
+      _postBadgesSavedTabSpotlightScheduled = false;
+      return;
+    }
+    final isTablet = MediaQuery.sizeOf(context).width >= 600;
+    final GlobalKey key = isTablet
+        ? _pickRailSpotlightKey(_savedRailIdleKey, _savedRailSelectedKey)
+        : _savedTabKey;
+    if (key.currentContext == null) {
+      _postBadgesSavedTabSpotlightScheduled = false;
+      return;
+    }
+    AppSpotlightLayer.show(
+      context: context,
+      targetKey: key,
+      holePadding: const EdgeInsets.all(6),
+      holeBorderRadius: 12,
+      onHoleTap: () => _onTabTap(2),
+      caption: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2C2C2E)),
+        ),
+        child: const Text(
+          'Kaydettiğin içerikleri Kaydedilenler sekmesinde bulursun; sekmeye dokun.',
+          style: TextStyle(
+            color: Color(0xFFE2E2E2),
+            fontSize: 14,
+            height: 1.35,
+          ),
+        ),
+      ),
+      onClosed: (reason) {
+        if (reason == AppSpotlightReason.skipped) {
+          _postBadgesSavedTabSpotlightScheduled = false;
+          return;
+        }
+        if (reason != AppSpotlightReason.targetTapped) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final moved = await OnboardingService.onPostBadgesSavedTabTapped();
+          if (!mounted) return;
+          _postBadgesSavedTabSpotlightScheduled = false;
+          if (moved) _onTabTap(2);
+        });
+      },
+    );
   }
 }
-
