@@ -5,19 +5,35 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 
 	"periodically/backend/internal/content"
 	"periodically/backend/internal/push"
+	"periodically/backend/pkg/mediaurl"
 
 	"github.com/gin-gonic/gin"
 )
 
 // Handler POST /api/admin/daily-send — manuel / cron tetikleyici.
 type Handler struct {
-	Repo        *content.Repository
-	PushRepo    *push.Repository
-	APNS        *APNSSender
-	AdminSecret string
+	Repo         *content.Repository
+	PushRepo     *push.Repository
+	APNS         *APNSSender
+	AdminSecret  string
+	APIPublicURL string
+	MediaBucket  string
+}
+
+func (h *Handler) itemForPush(item *content.DailyItem) *content.DailyItem {
+	if item == nil {
+		return nil
+	}
+	out := *item
+	if out.ImageURL != nil && strings.TrimSpace(h.APIPublicURL) != "" {
+		rw := mediaurl.RewriteMinIOToProxy(h.APIPublicURL, h.MediaBucket, *out.ImageURL)
+		out.ImageURL = &rw
+	}
+	return &out
 }
 
 // PostAdminDailySend sıradaki içeriği işaretler ve kayıtlı iOS cihazlarına APNs gönderir.
@@ -62,7 +78,7 @@ func (h *Handler) PostAdminDailySend(c *gin.Context) {
 		c.JSON(http.StatusOK, resp)
 		return
 	}
-	sent, err := h.APNS.SendDailyToDevices(c.Request.Context(), item, tokens)
+	sent, err := h.APNS.SendDailyToDevices(c.Request.Context(), h.itemForPush(item), tokens)
 	resp["apnsSent"] = sent
 	resp["apnsTargets"] = len(tokens)
 	if err != nil && sent == 0 {
@@ -97,7 +113,7 @@ func (h *Handler) RunBroadcastPing(ctx context.Context) (map[string]interface{},
 			"success": true, "itemId": item.ID, "apnsSkipped": true, "broadcastOnly": true,
 		}, nil
 	}
-	sent, err := h.APNS.SendDailyToDevices(ctx, item, tokens)
+	sent, err := h.APNS.SendDailyToDevices(ctx, h.itemForPush(item), tokens)
 	out := map[string]interface{}{
 		"success": true, "itemId": item.ID, "order": item.Order,
 		"apnsSent": sent, "apnsTargets": len(tokens), "broadcastOnly": true,

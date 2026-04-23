@@ -28,6 +28,9 @@ type Config struct {
 	MinIOBucket    string
 	MinIOUseSSL    bool
 	MinIOPublicURL string // Görüntüleme URL'i (prod'da CDN vb.)
+	// API_PUBLIC_URL — mobil cihazın göreceği API tabanı (örn. http://192.168.1.114:8080).
+	// Doluysa /api/daily-items yanıtlarındaki MinIO görsel URL'leri /api/media/... proxy adresine çevrilir.
+	APIPublicURL string
 
 	JWTSecret         string
 	Port              int
@@ -73,6 +76,7 @@ func Load() *Config {
 		MinIOBucket:    getEnv("MINIO_BUCKET", "motivationpictures"),
 		MinIOUseSSL:    getEnvBool("MINIO_USE_SSL", false),
 		MinIOPublicURL: getEnv("MINIO_PUBLIC_URL", "http://localhost:9000"),
+		APIPublicURL:   getEnv("API_PUBLIC_URL", ""),
 
 		JWTSecret:         getEnv("JWT_SECRET", "dev-secret-change-in-production"),
 		Port:              getEnvInt("PORT", 8080),
