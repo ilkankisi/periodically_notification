@@ -16,6 +16,8 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+
+	"periodically/backend/pkg/minioobjkey"
 )
 
 type Motivation struct {
@@ -31,12 +33,17 @@ type Motivation struct {
 
 func main() {
 	jsonPath := flag.String("json", "../mobile/assets/data/motivations.json", "motivations.json yolu")
-	minioBase := flag.String("minio", "http://localhost:9000", "MinIO base URL (imageUrl boşsa)")
+	minioBase := flag.String("minio", getEnv("MINIO_IMPORT_PUBLIC_URL", "http://127.0.0.1:9000"), "MinIO dışarıdan erişim tabanı (örn. http://192.168.1.5:9000 veya http://IP/minio)")
 	bucket := flag.String("bucket", "motivationpictures", "MinIO bucket adı")
 	flat := flag.Bool("flat", false, "downloadedFile'da yalnızca dosya adı kullan")
 	replace := flag.Bool("replace", false, "true: daily_items sil + daily_state next_order=1")
+	normalize := flag.Bool("normalize-minio-urls", true, "imageUrl'yi -minio tabanıyla yeniden yaz; kapatmak için -normalize-minio-urls=false")
 	flag.Parse()
-
+	if normEnv := strings.TrimSpace(getEnv("MINIO_IMPORT_NORMALIZE", "")); normEnv == "1" || strings.EqualFold(normEnv, "true") {
+		*normalize = true
+	} else if normEnv == "0" || strings.EqualFold(normEnv, "false") {
+		*normalize = false
+	}
 	data, err := os.ReadFile(*jsonPath)
 	if err != nil {
 		log.Fatalf("JSON okunamadı: %v", err)
@@ -78,6 +85,11 @@ func main() {
 				}
 			}
 			imageURL = buildMinIOURL(*minioBase, *bucket, objName)
+		} else if *normalize {
+			// url.Parse path içinde ';' gibi karakterlerde path'i kırpabiliyor; ham stringden anahtar çıkar.
+			if objKey, ok := minioobjkey.AfterBucket(imageURL, *bucket); ok {
+				imageURL = buildMinIOURL(*minioBase, *bucket, objKey)
+			}
 		}
 
 		var sentAt interface{}

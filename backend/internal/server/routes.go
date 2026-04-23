@@ -21,8 +21,10 @@ import (
 )
 
 // Setup route'ları kurar.
-func Setup(r *gin.Engine, contentRepo *content.Repository, authRepo *auth.Repository, actionsRepo *actions.Repository, gamificationRepo *gamification.Repository, appNotifsRepo *appnotifs.Repository, storageHandler *storage.Handler, db *sqlx.DB, jwtSecret string, googleOAuthAudiences, appleOAuthAudiences []string, apnsRegister *push.Handler, dailySend *dailysend.Handler) {
-	contentHandlers := &ContentHandlers{Repo: contentRepo}
+// apiPublicURL: API_PUBLIC_URL — doluysa daily-items imageUrl proxy tabanına çevrilir.
+// mediaBucket: MINIO_BUCKET — /api/media yalnızca bu bucket için çalışır.
+func Setup(r *gin.Engine, contentRepo *content.Repository, authRepo *auth.Repository, actionsRepo *actions.Repository, gamificationRepo *gamification.Repository, appNotifsRepo *appnotifs.Repository, storageHandler *storage.Handler, db *sqlx.DB, jwtSecret string, googleOAuthAudiences, appleOAuthAudiences []string, apnsRegister *push.Handler, dailySend *dailysend.Handler, apiPublicURL, mediaBucket string) {
+	contentHandlers := &ContentHandlers{Repo: contentRepo, APIPublicURL: apiPublicURL, MediaBucket: mediaBucket}
 	authHandlers := &auth.Handler{
 		Repo:                 authRepo,
 		JWTSecret:            jwtSecret,
@@ -42,6 +44,7 @@ func Setup(r *gin.Engine, contentRepo *content.Repository, authRepo *auth.Reposi
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "periodically-backend"})
 		})
+		api.GET("/media/*filepath", storageHandler.ServeMedia)
 		api.GET("/daily-items", contentHandlers.ListDailyItems)
 		api.GET("/daily-items/:id", contentHandlers.GetDailyItem)
 		if apnsRegister != nil {

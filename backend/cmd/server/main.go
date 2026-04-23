@@ -129,15 +129,18 @@ func main() {
 	appNotifsRepo := appnotifs.NewRepository(pg.DB, apnsSender, pushRepo)
 
 	dailySend := &dailysend.Handler{
-		Repo:        contentRepo,
-		PushRepo:    pushRepo,
-		APNS:        apnsSender,
-		AdminSecret: cfg.AdminSecret,
+		Repo:         contentRepo,
+		PushRepo:     pushRepo,
+		APNS:         apnsSender,
+		AdminSecret:  cfg.AdminSecret,
+		APIPublicURL: cfg.APIPublicURL,
+		MediaBucket:  cfg.MinIOBucket,
 	}
 
 	// 6. Route'ları kur
 	server.Setup(r, contentRepo, authRepo, actionsRepo, gamificationRepo, appNotifsRepo, storageHandler, pg.DB, cfg.JWTSecret,
-		config.SplitComma(cfg.GoogleOAuthClientIDs), config.SplitComma(cfg.AppleClientIDs), apnsHandler, dailySend)
+		config.SplitComma(cfg.GoogleOAuthClientIDs), config.SplitComma(cfg.AppleClientIDs), apnsHandler, dailySend,
+		cfg.APIPublicURL, cfg.MinIOBucket)
 
 	if s := strings.TrimSpace(cfg.DailySendBroadcastInterval); s != "" {
 		if apnsSender == nil {

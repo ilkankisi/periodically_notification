@@ -101,6 +101,16 @@ func (s *Client) ObjectPublicURL(objectKey string) string {
 	return buildObjectPublicURL(s.publicURL, s.bucket, objectKey)
 }
 
+// BucketName yapılandırılmış bucket adı (proxy doğrulaması için).
+func (s *Client) BucketName() string {
+	return s.bucket
+}
+
+// GetObject bucket içindeki nesneyi okumak için açar; çağıran Close() ile kapatmalıdır.
+func (s *Client) GetObject(ctx context.Context, objectKey string) (*minio.Object, error) {
+	return s.client.GetObject(ctx, s.bucket, objectKey, minio.GetObjectOptions{})
+}
+
 // PutLocalFile yerel dosyayı verilen object key ile yükler (örn. motivasyon_gorselleri_pexels/foo.jpg).
 func (s *Client) PutLocalFile(ctx context.Context, localPath, objectKey string) error {
 	ct := mime.TypeByExtension(path.Ext(localPath))

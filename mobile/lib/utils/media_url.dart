@@ -25,6 +25,18 @@ class MediaUrl {
     defaultValue: 'http://localhost:8080',
   );
 
+  /// `true`: `.../motivationpictures/...` URL'leri doğrudan MinIO yerine
+  /// `[API_BASE_URL]/api/media/motivationpictures/...` üzerinden yüklenir (backend proxy).
+  static const String _proxyMediaThroughApi = String.fromEnvironment(
+    'MEDIA_PROXY_THROUGH_API',
+    defaultValue: 'false',
+  );
+
+  static const String _mediaBucketPathPrefix = String.fromEnvironment(
+    'MEDIA_BUCKET_PATH',
+    defaultValue: '/motivationpictures/',
+  );
+
   static String _replacementHost() {
     final media = _publicMediaBase.trim();
     if (media.isNotEmpty) {
@@ -67,6 +79,26 @@ class MediaUrl {
     );
   }
 
+  /// MinIO path'i backend `/api/media` proxy'sine yönlendirir ([MEDIA_PROXY_THROUGH_API] açıksa).
+  static Uri _applyApiMediaProxy(Uri u) {
+    if (_proxyMediaThroughApi != 'true' && _proxyMediaThroughApi != '1') {
+      return u;
+    }
+    if (_isAwsStyleSignedQuery(u)) return u;
+    if (!u.path.startsWith(_mediaBucketPathPrefix)) return u;
+    final apiRoot = _apiBase.trim();
+    if (apiRoot.isEmpty) return u;
+    final base = Uri.parse(
+      apiRoot.endsWith('/') ? apiRoot.substring(0, apiRoot.length - 1) : apiRoot,
+    );
+    var rootPath = base.path;
+    if (rootPath.endsWith('/')) {
+      rootPath = rootPath.substring(0, rootPath.length - 1);
+    }
+    final mergedPath = '$rootPath/api/media${u.path}';
+    return base.replace(path: mergedPath.isEmpty ? '/' : mergedPath);
+  }
+
   /// Sunucunun döndürdüğü veya cache'teki URL'yi cihazın görebileceği hosta çevirir.
   static String? resolveForDevice(String? url) {
     if (url == null) return null;
@@ -77,6 +109,7 @@ class MediaUrl {
     if (parsed == null) return trimmed;
 
     parsed = _stripMisplacedPexelsFolder(parsed);
+    parsed = _applyApiMediaProxy(parsed);
 
     if (!_isLoopbackHost(parsed.host)) {
       return parsed.toString();
