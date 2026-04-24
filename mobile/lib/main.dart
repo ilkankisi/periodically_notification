@@ -1,18 +1,22 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+
+import 'screens/explore_page.dart';
+import 'screens/home_page.dart';
+import 'screens/profile_page.dart';
+import 'screens/saved_page.dart';
+import 'screens/service_unavailable_page.dart';
+import 'screens/value_proposition_onboarding.dart';
 import 'services/api_config.dart';
 import 'services/auth_service.dart';
 import 'services/backend_service.dart';
 import 'services/onboarding_service.dart';
 import 'services/push_notification_service.dart';
-import 'package:home_widget/home_widget.dart';
-import 'screens/home_page.dart';
-import 'screens/explore_page.dart';
-import 'screens/saved_page.dart';
-import 'screens/profile_page.dart';
-import 'screens/value_proposition_onboarding.dart';
+import 'services/reachability_service.dart';
 import 'widgets/bottom_nav_bar.dart';
 
 void appLog(String message) {
@@ -144,14 +148,64 @@ class _AppRoot extends StatefulWidget {
   State<_AppRoot> createState() => _AppRootState();
 }
 
-class _AppRootState extends State<_AppRoot> {
+class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _ready = false;
   bool _showOnboarding = false;
+  bool _reachabilityReady = false;
+  bool _reachabilityOk = false;
+  ReachabilityResult _lastReachability =
+      const ReachabilityResult(ReachabilityKind.serverUnreachable);
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  Timer? _connectivityDebounce;
+  int _gateEpoch = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _connectivitySub =
+        Connectivity().onConnectivityChanged.listen(_onConnectivityChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _connectivityDebounce?.cancel();
+    _connectivitySub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (!_ready || _showOnboarding || _reachabilityOk) return;
+    unawaited(_runReachabilityGate());
+  }
+
+  void _onConnectivityChanged(List<ConnectivityResult> results) {
+    if (!_ready || _showOnboarding || _reachabilityOk) return;
+    _connectivityDebounce?.cancel();
+    _connectivityDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      if (!_ready || _showOnboarding || _reachabilityOk) return;
+      unawaited(_runReachabilityGate());
+    });
+  }
+
+  Future<void> _runReachabilityGate() async {
+    if (!_ready || _showOnboarding) return;
+    final epoch = ++_gateEpoch;
+    if (mounted) {
+      setState(() => _reachabilityReady = false);
+    }
+    final result = await ReachabilityService.check();
+    if (!mounted || epoch != _gateEpoch) return;
+    setState(() {
+      _reachabilityReady = true;
+      _reachabilityOk = result.isOk;
+      _lastReachability = result;
+    });
   }
 
   Future<void> _load() async {
@@ -161,9 +215,15 @@ class _AppRootState extends State<_AppRoot> {
       _showOnboarding = !done;
       _ready = true;
     });
+    if (done) {
+      unawaited(_runReachabilityGate());
+    }
   }
 
-  void _onboardingFinished() => setState(() => _showOnboarding = false);
+  void _onboardingFinished() {
+    setState(() => _showOnboarding = false);
+    unawaited(_runReachabilityGate());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -177,6 +237,20 @@ class _AppRootState extends State<_AppRoot> {
     }
     if (_showOnboarding) {
       return ValuePropositionOnboarding(onFinished: _onboardingFinished);
+    }
+    if (!_reachabilityReady) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF121212),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF2094F3)),
+        ),
+      );
+    }
+    if (!_reachabilityOk) {
+      return ServiceUnavailablePage(
+        lastResult: _lastReachability,
+        onRetry: _runReachabilityGate,
+      );
     }
     return const _MainShell();
   }
@@ -202,6 +276,8 @@ class _MainShellState extends State<_MainShell> {
   bool _profileTabSpotlightScheduled = false;
   bool _postBadgesExploreTabSpotlightScheduled = false;
   bool _postBadgesSavedTabSpotlightScheduled = false;
+  StreamSubscription<List<ConnectivityResult>>? _spotlightConnectivitySub;
+  bool _spotlightNetworkOk = true;
 
   static const _destinations = [
     (icon: Icons.home_outlined, label: 'Anasayfa'),
@@ -214,6 +290,9 @@ class _MainShellState extends State<_MainShell> {
   void initState() {
     super.initState();
     OnboardingService.registerTabRequestHandler(_onTabTap);
+    _spotlightConnectivitySub =
+        Connectivity().onConnectivityChanged.listen(_onSpotlightConnectivity);
+    unawaited(_syncSpotlightConnectivity());
     unawaited(_prepareDebugTourStart());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_maybeShowProfileTabSpotlight());
@@ -222,8 +301,25 @@ class _MainShellState extends State<_MainShell> {
     });
   }
 
+  void _onSpotlightConnectivity(List<ConnectivityResult> results) {
+    final ok = results.any((r) => r != ConnectivityResult.none);
+    if (!mounted) return;
+    setState(() => _spotlightNetworkOk = ok);
+  }
+
+  Future<void> _syncSpotlightConnectivity() async {
+    try {
+      final r = await Connectivity().checkConnectivity();
+      final ok = r.any((x) => x != ConnectivityResult.none);
+      if (mounted) setState(() => _spotlightNetworkOk = ok);
+    } on Object catch (_) {
+      if (mounted) setState(() => _spotlightNetworkOk = false);
+    }
+  }
+
   @override
   void dispose() {
+    _spotlightConnectivitySub?.cancel();
     OnboardingService.registerTabRequestHandler(null);
     super.dispose();
   }
@@ -337,6 +433,7 @@ class _MainShellState extends State<_MainShell> {
 
   Future<void> _maybeShowProfileTabSpotlight() async {
     if (!mounted || _profileTabSpotlightScheduled) return;
+    if (!_spotlightNetworkOk) return;
     if (MediaQuery.sizeOf(context).width >= 600) return;
     final ftp = await OnboardingService.getGlobalTourStep();
     if (ftp != OnboardingService.ftNeedProfileTabTap) return;
@@ -411,6 +508,7 @@ class _MainShellState extends State<_MainShell> {
 
   Future<void> _maybeShowPostBadgesExploreTabSpotlight() async {
     if (!mounted || _postBadgesExploreTabSpotlightScheduled) return;
+    if (!_spotlightNetworkOk) return;
     final ftp = await OnboardingService.getGlobalTourStep();
     if (ftp != OnboardingService.ftPostBadgesExploreTab) return;
     _postBadgesExploreTabSpotlightScheduled = true;
@@ -492,6 +590,7 @@ class _MainShellState extends State<_MainShell> {
 
   Future<void> _maybeShowPostBadgesSavedTabSpotlight() async {
     if (!mounted || _postBadgesSavedTabSpotlightScheduled) return;
+    if (!_spotlightNetworkOk) return;
     final ftp = await OnboardingService.getGlobalTourStep();
     if (ftp != OnboardingService.ftPostBadgesSavedTab) return;
     _postBadgesSavedTabSpotlightScheduled = true;
